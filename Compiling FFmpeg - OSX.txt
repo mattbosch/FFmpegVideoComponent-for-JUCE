@@ -1,0 +1,126 @@
+****************************************
+Compiling FFmpeg On Mac Os X ***********
+****************************************
+
+0. Helpfull Resources ******************
+
+https://www.youtube.com/watch?v=-tRh1ThNxoc
+https://www.rickmakes.com/compiling-ffmpeg-on-mac-with-apple-silicon-requires-macports/
+https://stackoverflow.com/questions/65113600/why-is-ffmpeg-linking-with-too-many-libraries
+JUCE Forum
+
+1. Prequisites 
+
+Get XCode: AppStore
+
+
+2. install macports 
+
+Goto https://guide.macports.org/, download and install. Which way (pkg, git, etc.) does not matter.
+ 
+ 
+3. install other libraries (codecs, etc.)
+
+sudo port -N install libass libfdk-aac lame libopus libtheora libogg libvorbis libbluray dav1d libmodplug libmodplug librsvg speex x265 XviD libsdl2 gnutls soxr openjpeg
+
+# x264 in GPL only
+#sudo port -N install x264
+#sudo port -N uninstall x264
+
+discarded: x264
+added:
+
+this will take a while.
+
+
+4. install FFmpeg **********************
+
+Download source code of ffmpeg (bzip2), if not in this project (/ffmpeg/ffmpeg-5.1.2.tar.bz2).
+FFmpeg-Version: 5.1.2 "Riemann", http://ffmpeg.org/download.html#get-sources
+
+Copy file to desired directory.
+
+Goto console, then:
+
+# extract source code
+tar jxvf ffmpeg-5.1.2.tar.bz2
+
+# go to unpacked directory
+cd ffmpeg-5.1.2
+
+# reset everything, when ever you want to reset your configuration, run this
+make clean
+
+# configure , this is the most important part. FFmpeg is configured so it has the following features:
+# - output shared libraries
+# - specific rpath and install_name are set for the resulting libraries
+# - FFmpeg is LGPLv3 compliant
+# - Support for Apple Things
+# - only file protocol
+# - no programs, no documentation, no filters, no static builds
+#
+# Run one of the following commands:
+#
+#### minimal configuration: very specific about decodersm muxers, parsers. bsfs untouched ####
+./configure --prefix='../../osx_arm' --install-name-dir='@executable_path/../libs' --extra-ldflags=-Wl,-rpath,'@executable_path/../libs' --cc=/usr/bin/clang --disable-filters --disable-programs --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages --enable-version3 --disable-static  --enable-shared --enable-avdevice --enable-avcodec --enable-avformat --enable-swresample --enable-swscale --enable-avfilter --disable-libjack --disable-libopencore-amrnb --disable-libopencore-amrwb --disable-libxcb --disable-libxcb-shm --disable-libxcb-xfixes --disable-indev=jack --disable-outdev=xv --enable-audiotoolbox --enable-videotoolbox --disable-securetransport --enable-pthreads --disable-protocols --enable-protocol='file' --disable-muxers --disable-decoders --enable-decoder='h264'  --disable-demuxers --enable-demuxer='h264,mov' --disable-parsers --enable-parser='aac,h264,mpeg4video,mpegaudio,mpegvideo'
+
+--disable-indevs
+
+#### "normal" configuration: all decoders, all demuxers, all parsers ####
+./configure --prefix='../../osx_arm' \
+--install-name-dir='@executable_path/../libs' \
+--extra-ldflags=-Wl,-rpath,'@executable_path/../libs' \
+--cc=/usr/bin/clang \
+--disable-filters \
+--disable-programs \
+--disable-doc \
+--disable-htmlpages \
+--disable-manpages \
+--disable-podpages \
+--disable-txtpages \
+--enable-version3 \
+--disable-static  \
+--enable-shared \
+--enable-avdevice \
+--enable-avcodec \
+--enable-avformat \
+--enable-swresample \
+--enable-swscale \
+--enable-avfilter \
+--disable-libjack \
+--disable-libopencore-amrnb \
+--disable-libopencore-amrwb \
+--disable-libxcb \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-indev=jack \
+--disable-outdev=xv \
+--enable-audiotoolbox \
+--enable-videotoolbox \
+--disable-securetransport \
+--enable-pthreads \
+--disable-protocols \
+--enable-protocol='file'
+
+    discarded: --disable-muxers --disable-decoders --enable-decoder='h264' --disable-demuxers --enable-demuxer='h264,mov' --disable-parsers --enable-parser='aac,h264,mpeg4video,mpegaudio,mpegvideo'
+
+
+Look for this in configure's output: "License: LGPL version 3 or later"
+This means we are save...i guess.
+If you see "License: nonfree and unredistributable" or something else, reconfigure
+
+Then run "make -j 12" (faster on M1) or just "make" (normal speed).
+This starts compilation.
+
+Then run "make install"
+This will copy the necessary files to the given location (--prefix='../../osx_arm')')
+If you get a message like this:
+install: /opt/local/share/man/man1/ffmpeg.1: Permission denied
+make: *** [install-man] Error 71
+You can ignore this. Probably man pages were not installed, which is not a problem. If you want them, run
+sudo make install
+
+copy include directory from unzipped soruce code folder to '../../osx_arm' (the directory where also the libs are)
+
+
+

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<JUCERPROJECT id="I33VJD" name="FFmpegVideoComponent Project" projectType="guiapp"
+              useAppConfig="0" addUsingNamespaceToJuceHeader="0" displaySplashScreen="0"
+              jucerFormatVersion="1" defines="JUCE_MODAL_LOOPS_PERMITTED=1"
+              splashScreenColour="Light">
+  <MAINGROUP id="RCUz45" name="FFmpegVideoComponent Project">
+    <GROUP id="{99A67EE6-6D1E-88CC-CD0B-0817175B8ADD}" name="Source">
+      <FILE id="ve10Ng" name="Main.cpp" compile="1" resource="0" file="Source/Main.cpp"/>
+      <FILE id="sUt0eF" name="MainComponent.h" compile="0" resource="0" file="Source/MainComponent.h"/>
+      <FILE id="f2yqmB" name="MainComponent.cpp" compile="1" resource="0"
+            file="Source/MainComponent.cpp"/>
+      <FILE id="GeFils" name="TransportComponent.cpp" compile="1" resource="0"
+            file="Source/TransportComponent.cpp"/>
+      <FILE id="MgJsnn" name="TransportComponent.h" compile="0" resource="0"
+            file="Source/TransportComponent.h"/>
+      <GROUP id="{DA693F11-878C-8991-43D0-7FBFA5A898DD}" name="cb_ffmpeg">
+        <FILE id="gLXv60" name="FFmpegVideoFramesFIFO.cpp" compile="1" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoFramesFIFO.cpp"/>
+        <FILE id="ZA7DI2" name="FFmpegVideoFramesFIFO.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoFramesFIFO.h"/>
+        <FILE id="aBKQSC" name="FFmpegVideoComponent.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoComponent.h"/>
+        <FILE id="XBQgsn" name="FFmpegVideoComponent.cpp" compile="1" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoComponent.cpp"/>
+        <FILE id="rHqQxL" name="FFmpegVideoReader.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoReader.h"/>
+        <FILE id="RJa3fW" name="FFmpegVideoReader.cpp" compile="1" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoReader.cpp"/>
+        <FILE id="j0LnMI" name="FFmpegVideoDecodeThread.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoDecodeThread.h"/>
+        <FILE id="ElJZtv" name="FFmpegVideoDecodeThread.cpp" compile="1" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoDecodeThread.cpp"/>
+        <FILE id="Llsbxy" name="FFmpegVideoListener.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoListener.h"/>
+        <FILE id="CPNzjH" name="FFmpegVideoScaler.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/FFmpegVideoScaler.h"/>
+        <FILE id="ANZZzV" name="AudioBufferFIFO.h" compile="0" resource="0"
+              file="Source/cb_ffmpeg/AudioBufferFIFO.h"/>
+        <FILE id="G5qEWy" name="FFmpegHelpers.h" compile="0" resource="0" file="Source/cb_ffmpeg/FFmpegHelpers.h"/>
+        <FILE id="PKUKfN" name="FFmpegHelpers.cpp" compile="1" resource="0"
+              file="Source/cb_ffmpeg/FFmpegHelpers.cpp"/>
+      </GROUP>
+      <GROUP id="{3063B18A-6A76-6750-7E7E-530BD2BA08EA}" name="cb_strings">
+        <FILE id="sOsCHR" name="StringHelper.h" compile="0" resource="0" file="Source/cb_strings/StringHelper.h"/>
+      </GROUP>
+    </GROUP>
+    <GROUP id="{28B36CDF-AB25-0F02-F003-95F4E42C4904}" name="Scripts">
+      <FILE id="uIH6RQ" name="copy_and_link_libs.sh" compile="0" resource="0"
+            file="Scripts/copy_and_link_libs.sh" xcodeResource="0"/>
+      <FILE id="G1qSSy" name="post_build.sh" compile="0" resource="0" file="Scripts/post_build.sh"
+            xcodeResource="0"/>
+    </GROUP>
+    <GROUP id="{7C2D1279-E77E-D1F7-573D-9CD875E9D2E6}" name="Other">
+      <FILE id="AXP9L6" name="CONTRIBUTING.md" compile="0" resource="0" file="CONTRIBUTING.md"
+            xcodeResource="1"/>
+      <FILE id="xwsOK8" name="README.md" compile="0" resource="0" file="README.md"
+            xcodeResource="0"/>
+    </GROUP>
+  </MAINGROUP>
+  <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1"/>
+  <EXPORTFORMATS>
+    <XCODE_MAC targetFolder="Builds/MacOSX" externalLibraries="avformat&#10;avcodec&#10;avutil&#10;swscale&#10;swresample"
+               xcodeValidArchs="arm64,arm64e" postbuildCommand="#!/bin/sh&#10;&#10;sh ../../Scripts/post_build.sh"
+               extraDefs="FFMPEG_ROOT=../../ffmpeg/osx_arm&#10;" extraCompilerFlags="-I${FFMPEG_ROOT}/include"
+               extraLinkerFlags="-L${FFMPEG_ROOT}/lib&#10;">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="FFmpegVideoComponent" osxCompatibility="10.9 SDK"
+                       macOSDeploymentTarget="10.9"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="FFmpegVideoComponent"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_core" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_basics" path="../../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../JUCE/modules"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
+    <VS2022 targetFolder="Builds/VisualStudio2022" extraCompilerFlags="-I${FFMPEG_ROOT}/include&#10;"
+            extraLinkerFlags="-LIBPATH:${FFMPEG_ROOT}/bin&#10;" externalLibraries="avformat.lib&#10;avcodec.lib&#10;avutil.lib&#10;swresample.lib&#10;swscale.lib&#10;"
+            extraDefs="FFMPEG_ROOT=../../ffmpeg/win&#10;">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" postbuildCommand="../../Scripts/post_build_debug.bat"
+                       prebuildCommand="../../Scripts/pre_build_debug.bat" targetName="FFmpegVideoComponent"/>
+        <CONFIGURATION isDebug="0" name="Release" prebuildCommand="../../Scripts/pre_build_release.bat"
+                       postbuildCommand="../../Scripts/post_build_release.bat" targetName="FFmpegVideoComponent"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_core" path="../../juce"/>
+        <MODULEPATH id="juce_data_structures" path="../../juce"/>
+        <MODULEPATH id="juce_events" path="../../juce"/>
+        <MODULEPATH id="juce_graphics" path="../../juce"/>
+        <MODULEPATH id="juce_gui_basics" path="../../juce"/>
+        <MODULEPATH id="juce_audio_basics" path="../../../../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../JUCE/modules"/>
+      </MODULEPATHS>
+    </VS2022>
+  </EXPORTFORMATS>
+  <MODULES>
+    <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_devices" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+  </MODULES>
+  <LIVE_SETTINGS>
+    <OSX/>
+  </LIVE_SETTINGS>
+</JUCERPROJECT>

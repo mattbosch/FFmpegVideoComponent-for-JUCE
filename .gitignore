@@ -1,0 +1,6 @@
+Builds/
+ffmpeg/osx_arm
+ffmpeg/win
+ffmpeg/src/ffmpeg-5.1.2
+script_log.txt
+.DS_Store
