@@ -10,8 +10,8 @@ https://superuser.com/questions/1425350/how-to-compile-the-best-version-of-ffmpe
 https://winlibs.com/
 https://github.com/TechSmith/FFmpeg/tree/main/Windows
 
-If we want to build FFmpeg ourself and configure it to our liking, we need unix building tools like 
-gcc (compiler) or make. There is several ways to get these, but i used cygwin.
+Since we want to build FFmpeg ourself to configure it to our liking, we need unix building tools like 
+gcc (compiler) and make. There is several ways to get these, i chose cygwin.
 
 
 1. Cygwin 
@@ -100,13 +100,13 @@ LDFLAGS=-L/usr/x86_64-w64-mingw32/sys-root/mingw/lib &&
 export PKG_CONFIG_PATH=  &&
 export PKG_CONFIG_LIBDIR=/usr/x86_64-w64-mingw32/sys-root/mingw/lib/pkgconfig 
 
-# configure , this is the most important part. FFmpeg is (tryied to be) configured
-# with the folloeing features:
+# configure, this is the most important part. FFmpeg should be configured
+# with the following features:
 # - output shared libraries
 # - FFmpeg is LGPLv3 compliant
 # - only file protocol
 # - no programs, no documentation, no filters, no static builds
-# - if possible don't use thirs libraries
+# - if possible don't use third libraries
 #
 # Run one of the following commands:
 #
