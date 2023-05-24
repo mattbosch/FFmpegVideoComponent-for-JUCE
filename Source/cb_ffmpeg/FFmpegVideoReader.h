@@ -25,7 +25,7 @@ SOFTWARE
 /**
     FFmpegVideoReader.h
 
-    Author:  Clemens Bergthaller
+    Author:  Daniel Walz, Clemens Bergthaller
  
     This is a reader to decode and buffer video files using FFmpeg. It inherits juce::PositionableAudioSource
     to provide basic transport functions.

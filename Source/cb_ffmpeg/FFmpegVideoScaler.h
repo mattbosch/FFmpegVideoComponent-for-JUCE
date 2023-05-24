@@ -25,7 +25,7 @@ SOFTWARE
 /**
     FFmpegVideoScaler.h
  
-    Author:  Daniel Walz
+    Author:  Daniel Walz, Clemens Bergthaller
  
     This class converts and scales av frames to JUCE images.
  */

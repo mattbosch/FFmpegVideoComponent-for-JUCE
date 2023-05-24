@@ -11,7 +11,6 @@ FFmpegVideoReader::FFmpegVideoReader (const int audioFifoSize, const int videoFi
 
 FFmpegVideoReader::~FFmpegVideoReader()
 {
-    DBG("FFmpegVideoReader::~FFmpegVideoReader()");
     closeVideoFile();
     masterReference.clear();
 }
@@ -53,7 +52,7 @@ void FFmpegVideoReader::prepareToPlay (int samplesPerBlockExpected, double newSa
     //The readers samplerate should not be changed, so it's data can be correctly resampled. It must always be the
     //correct samplerate of the video file. It is set when loading a file
 
-    DBG("FFmpegVideoReader::prepareToPlay, SR: " + juce::String(getSampleRate()));
+//    DBG("FFmpegVideoReader::prepareToPlay, SR: " + juce::String(getSampleRate()));
     
     const int numChannels = getNumberOfAudioChannels();
     audioFifo.setSize (numChannels, audioFifoSize);
@@ -65,7 +64,7 @@ void FFmpegVideoReader::prepareToPlay (int samplesPerBlockExpected, double newSa
 
 void FFmpegVideoReader::releaseResources ()
 {
-    DBG("FFmpegVideoReader::releaseResources()");
+//    DBG("FFmpegVideoReader::releaseResources()");
     audioFifo.clear();
 }
 
@@ -105,7 +104,7 @@ bool FFmpegVideoReader::waitForNextAudioBlockReady (const juce::AudioSourceChann
 
 void FFmpegVideoReader::setNextReadPosition (juce::int64 newPosition)
 {
-    DBG("FFmpegVideoReader::setNextReadPosition(" + juce::String(newPosition) + ")");
+//    DBG("FFmpegVideoReader::setNextReadPosition(" + juce::String(newPosition) + ")");
     if (getSampleRate() <= 0)
         return;
     nextReadPos = newPosition;

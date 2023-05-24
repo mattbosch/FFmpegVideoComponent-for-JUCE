@@ -137,26 +137,32 @@ void TransportComponent::resized()
 
 void TransportComponent::buttonClicked (juce::Button* button)
 {
-    if (button == &playPauseButton ){
+    if (button == &playPauseButton )
+    {
         startOrPause();
     }
-    else if (button == &openVideoButton ){
+    else if (button == &openVideoButton )
+    {
         juce::FileChooser chooser ("Open Video File");
-        if (chooser.browseForFileToOpen()) {
+        if (chooser.browseForFileToOpen())
+        {
             juce::File video = chooser.getResult();
             videoScreenComponent->load(video);
         }
     }
-    else if (button == &speedNormalButton){
+    else if (button == &speedNormalButton)
+    {
         DBG("playback speed: 1.0");
         videoScreenComponent->setPlaySpeed(1.0);
     }
-    else if (button == &speedSlowerButton){
+    else if (button == &speedSlowerButton)
+    {
         double newSpeed = videoScreenComponent->getPlaySpeed() - 0.2;
         DBG("playback speed slower: " + juce::String(newSpeed));
         videoScreenComponent->setPlaySpeed(newSpeed);
     }
-    else if (button == &speedFasterButton){
+    else if (button == &speedFasterButton)
+    {
         double newSpeed = videoScreenComponent->getPlaySpeed() + 0.2;
         DBG("playback speed faster: " + juce::String(newSpeed));
         videoScreenComponent->setPlaySpeed(newSpeed);
@@ -168,11 +174,6 @@ void TransportComponent::timerCallback()
     repaint();
 }
 
-void TransportComponent::updateSlider()
-{
-
-}
-
 void TransportComponent::sliderValueChanged (juce::Slider* slider)
 {
     if (slider == &positionSlider)
@@ -181,22 +182,22 @@ void TransportComponent::sliderValueChanged (juce::Slider* slider)
     }
 }
 
-void TransportComponent::sliderDragStarted ( juce::Slider* slider)
-{
-#if JUCE_MAC
-#pragma unused(slider)
-#endif
-}
+//void TransportComponent::sliderDragStarted ( juce::Slider* slider)
+//{
+//#if JUCE_MAC
+//#pragma unused(slider)
+//#endif
+//}
 
-void TransportComponent::sliderDragEnded ( juce::Slider* slider)
-{
-#if JUCE_MAC
-#pragma unused(slider)
-#endif
-}
+//void TransportComponent::sliderDragEnded ( juce::Slider* slider)
+//{
+//#if JUCE_MAC
+//#pragma unused(slider)
+//#endif
+//}
 
-void TransportComponent::startOrPause() {
-    
+void TransportComponent::startOrPause()
+{
     if (videoScreenComponent->isVideoOpen())
     {
         if ( videoScreenComponent->isPlaying() )
@@ -209,20 +210,21 @@ void TransportComponent::startOrPause() {
         }
         resized();
     }
-    
 }
 
-void TransportComponent::stop() {
-
-}
-
-void TransportComponent::play() {
-
-}
+//void TransportComponent::stop()
+//{
+//
+//}
+//
+//void TransportComponent::play()
+//{
+//
+//}
 
 void TransportComponent::positionSecondsChanged (const double pts)
 {
-//    DBG("position update:" + juce::String(pts));
+    //update label and slider
     auto lambda = [pts, this]()
     {
         positionLabel.setText(StringHelper::convertSecondsToTimeString(pts, false), juce::dontSendNotification);

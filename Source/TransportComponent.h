@@ -52,13 +52,13 @@ public:
 
     void sliderValueChanged (juce::Slider* slider) override;
 
-    void sliderDragStarted ( juce::Slider* slider) override;
+//    void sliderDragStarted ( juce::Slider* slider) override;
 
-    void sliderDragEnded ( juce::Slider* slider) override;
+//    void sliderDragEnded ( juce::Slider* slider) override;
 
+    /*! called every 100 ms to update slider position and time label according to play position */
     void timerCallback() override;
     
-    void updateSlider();
     
     FFMpegVideoComponent* getVideoComponent();
     void setVideoComponent (FFMpegVideoComponent* videoScreenComp);
@@ -71,11 +71,12 @@ public:
     
     void startOrPause();
 
-    void stop();
-    void play();
+//    void stop();
+//    void play();
     
     void setTime(double time);
     
+    /*! FFmpgVideoListener */
     void positionSecondsChanged (const double pts) override;
 
 private:

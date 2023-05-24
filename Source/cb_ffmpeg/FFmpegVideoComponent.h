@@ -147,8 +147,6 @@ private:
     /*! member stating if the current frame was painted */
     bool frameWasPainted;
     
-//    double videoAspectRatio; //i.e. 16/9, 4/3, etc.
-    
     double playSpeed = 1.0;
     
     bool isPaused = false;

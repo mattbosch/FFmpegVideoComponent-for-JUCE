@@ -25,7 +25,7 @@ SOFTWARE
 /**
     FFmpegVideoReader.h
 
-    Author:  Clemens Bergthaller
+    Author:  Daniel Walz, Clemens Bergthaller
  
     This is a thread providing access to file based video streams using FFmpeg. This class handles the following tasks:
     - open files
@@ -72,7 +72,7 @@ public:
     /*! closes the current video file */
     void closeVideoFile ();
     
-    /*! return the current video file*/
+    /*! returns the current video file*/
     juce::File getVideoFile () const;
     
     /*! returns true if a video is currently open */
@@ -84,11 +84,10 @@ public:
     /*! deregisters a listener */
     void removeVideoListener (FFmpegVideoListener* listener);
     
-    /** Return the framerate. If framerate in the decoder context is not set,
-     this will return the timebase of the video stream. */
+    /** Return the framerate. If framerate in the decoder context is not set, this will return the timebase of the video stream. */
     double getFramesPerSecond () const;
     
-    /** Resets the reading position in the current video file. TODO: more and better comments */
+    /** Sets or resets the reading position in the current video file. */
     void setPositionSeconds (const double newPositionSeconds, bool seek = false);
     
     /** returns the position in seconds */
@@ -172,7 +171,6 @@ private:
     AVFormatContext* formatContext;
     AVCodecContext* videoContext;
     AVCodecContext* audioContext;
-//    AVCodecContext* subtitleContext;
     SwrContext* audioConverterContext;
     
     /*! index of the video stream */
@@ -249,8 +247,4 @@ protected:
 
     /*! the value 1/SampleRate as member for faster calculation, when dividing by sample rate*/
     double sampleRateInverted = 0.0;
-    
-
-    
-    
 };

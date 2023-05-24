@@ -25,19 +25,20 @@ FFMpegVideoComponent::FFMpegVideoComponent()
 
     setAudioChannels (0, 2);
 
-    if (juce::AudioIODevice* device = deviceManager.getCurrentAudioDevice())
-    {
-        DBG ("Current Samplerate: " + juce::String (device->getCurrentSampleRate()));
-        DBG ("Current Buffersize: " + juce::String (device->getCurrentBufferSizeSamples()));
-        DBG ("Current Bitdepth:   " + juce::String (device->getCurrentBitDepth()));
-    }
+//    if (juce::AudioIODevice* device = deviceManager.getCurrentAudioDevice())
+//    {
+//        DBG ("Current Samplerate: " + juce::String (device->getCurrentSampleRate()));
+//        DBG ("Current Buffersize: " + juce::String (device->getCurrentBufferSizeSamples()));
+//        DBG ("Current Bitdepth:   " + juce::String (device->getCurrentBitDepth()));
+//    }
+//    else{
+//        DBG("AudioDevice not loaded!");
+//    }
 }
 
 
 FFMpegVideoComponent::~FFMpegVideoComponent()
 {
-    DBG("FFMpegVideoComponent::~FFMpegVideoComponent()");
-
     if (videoReader)
         videoReader->removeVideoListener (this);
     
@@ -112,7 +113,7 @@ FFmpegVideoReader* FFMpegVideoComponent::getVideoReader() const
 
 void FFMpegVideoComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
-    DBG("FFMpegVideoComponent: prepareToPlay, SR: " + juce::String(sampleRate) );
+//    DBG("FFMpegVideoComponent: prepareToPlay, SR: " + juce::String(sampleRate) );
     readBuffer.setSize (2, samplesPerBlockExpected);
     //video reader does not need to be prepared, since it's source of the
     //transport source and gets prepared by it.
@@ -123,7 +124,7 @@ void FFMpegVideoComponent::prepareToPlay (int samplesPerBlockExpected, double sa
 
 void FFMpegVideoComponent::releaseResources()
 {
-    DBG("FFMpegVideoComponent::releaseResources()");
+//    DBG("FFMpegVideoComponent::releaseResources()");
 }
 
 void FFMpegVideoComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
@@ -316,7 +317,6 @@ void FFMpegVideoComponent::videoFileChanged (const juce::File& video)
         //setPlayPosition(0.0), but for some reason, the first attempt to set position results in
         //audio playback being ahead of image data.
         setPlayPosition(0.0);
-
     }
     else
     {

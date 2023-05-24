@@ -4,6 +4,8 @@ FFmpegVideoComponent for JUCE projects
 This project implements an alternative video component for JUCE using FFmpeg for decoding file based video streams. The component is embedded in a simple example program to demonstrate how it could be used. 
 I developed this on Mac OS X and Windows. I am sure it is relatively easy to use it on linux machines as well.
 Please keep in mind, that I tested this with my h.264 files only. It might work with other codecs, too, but I can’t guarantee it. I might consider to develop support for more codecs in the future.
+I consider this project as NOT FINISHED. And since i am using it myself in my own projects, it is very likely that things will change in near future. For this reason you will probably still find some debug-prints or commented code sections. 
+The program is rather basic in it's features, which in my opinion makes it a good start or demo project if you intend to work with JUCE and FFmpeg in any way.
 
 
 ## Why?
@@ -26,11 +28,6 @@ This is important! Read „Compiling FFmpeg - OSX.txt“ or „Compiling FFmpeg 
 I saved FFmpeg's source code at "PROJECT/ffmpeg/src". I keep the compiled ffmpeg data at "PROJECT/ffmpeg/osx_arm" or "PROJECT/ffmpeg/osx_win". If you choose to save your FFmpeg version elsewhere, make sure to change the post build scripts at "PROJECT/Scripts", so FFmpeg can ne found when for linking. 
 
 3. Use Projucer to create projects for Xcode or Visual Studio. 
-
-
-## Background
-
-
 
 
 # License

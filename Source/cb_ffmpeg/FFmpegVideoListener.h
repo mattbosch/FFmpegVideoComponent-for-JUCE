@@ -25,7 +25,7 @@ SOFTWARE
 /**
     FFmpegVideoReader.h
 
-    Author:  Clemens Bergthaller
+    Author:  Daniel Walz, Clemens Bergthaller
 
     This is an interface allowing classes to listen to video readers.
 
@@ -56,11 +56,10 @@ public:
     /** This is called when the video source file has changed */
     virtual void videoFileChanged (const juce::File& newSource) {}
 
-    /** This is called whenever the size changed, so a framebuffer can be resized */
+    /** This is called whenever the video size changed. */
     virtual void videoSizeChanged (const int width, const int height, const AVPixelFormat) {}
 
-    /** This is called when a frame is due to be displayed according to audio's
-     presentation timestamp PTS as raw frame */
+    /** This is called when a frame is to be displayed. */
     virtual void displayNewFrame (const AVFrame*) {}
 
     /** This will notify about the current position. */

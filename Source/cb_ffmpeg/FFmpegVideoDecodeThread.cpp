@@ -31,7 +31,6 @@ currentPositionSeconds (0.0)
 
 FFmpegVideoDecodeThread::~FFmpegVideoDecodeThread ()
 {
-    DBG("FFmpegVideoDecodeThread::~FFmpegVideoDecodeThread()");
     av_frame_free (&audioFrame);
     //force to stop thread, if necessary
     stopThread (1000);
@@ -59,7 +58,8 @@ int FFmpegVideoDecodeThread::openCodecContext (AVCodecContext** codecContext,
         }
         // Allocate a codec context for the decoder
         *codecContext = avcodec_alloc_context3 (codec);
-        if (!*codecContext) {
+        if (!*codecContext)
+        {
             DBG ("Unable to allocate memory for the \"" + juce::String (av_get_media_type_string(mediaType)) +
                  "\" codec context");
             return -1;
@@ -80,12 +80,11 @@ int FFmpegVideoDecodeThread::openCodecContext (AVCodecContext** codecContext,
             avcodec_free_context (codecContext);
             return -1;
         }
-
         return id;
     }
-    else {
-        DBG ("Could not find " + juce::String (av_get_media_type_string(mediaType)) +
-             " stream in input file");
+    else
+    {
+        DBG ("Could not find " + juce::String (av_get_media_type_string(mediaType)) + " stream in input file");
         return -1;
     }
 }
@@ -213,7 +212,7 @@ juce::File FFmpegVideoDecodeThread::getVideoFile () const
 
 void FFmpegVideoDecodeThread::run()
 {
-    DBG("run...");
+//    DBG("run...");
     unsigned long newFramesCount = 0;   //frames in buffer ready to read
     bool bufferingStopped = false;      //keeps track if buffers are full, for debug use only
 
@@ -230,14 +229,14 @@ void FFmpegVideoDecodeThread::run()
         if (decodingShouldPause)
         {
             //pause decoding and signal that it has stopped
-            DBG("\tDecoding paused...");
+//            DBG("\tDecoding paused...");
             decodingIsPaused = true;
             waitForDecodingToPause.signal();
             //wait until continue signal
-            DBG("Wait until thread is continued...");
+//            DBG("Wait until thread is continued...");
             waitUntilContinue.reset();
             waitUntilContinue.wait(-1);
-            DBG("\tDecoding continued...");
+//            DBG("\tDecoding continued...");
         }
         if (!decodingIsPaused)
         {
@@ -256,7 +255,7 @@ void FFmpegVideoDecodeThread::run()
                     if (!_firstDataHasArrived)
                     {
                         _firstDataHasArrived = true;
-                        DBG("Buffers are filled enough...");
+//                        DBG("Buffers are filled enough...");
                     }
                     waitUntilBuffersAreFullEnough.signal();
                 }
@@ -265,7 +264,7 @@ void FFmpegVideoDecodeThread::run()
                     if (!_firstDataHasArrived)
                     {
                         _firstDataHasArrived = true;
-                        DBG("First data has arrived...");
+//                        DBG("First data has arrived...");
                     }
                     waitForFirstData.signal();
                 }
@@ -280,7 +279,7 @@ void FFmpegVideoDecodeThread::run()
                     {
                         if ( ! endOfFileReached )
                         {
-                            DBG("Decoding Thread has reached end of file.");
+//                            DBG("Decoding Thread has reached end of file.");
                             endOfFileReached = true;
                             waitUntilBuffersAreFullEnough.signal();
                         }
@@ -311,7 +310,7 @@ void FFmpegVideoDecodeThread::run()
         }
 
     }
-    DBG("VideoDecodeThread has stopped...");
+//    DBG("VideoDecodeThread has stopped...");
 }
 
 int FFmpegVideoDecodeThread::readAndDecodePacket()
@@ -356,6 +355,7 @@ int FFmpegVideoDecodeThread::readAndDecodePacket()
         decodeAudioPacket (packet);
     else if(packet->stream_index == videoStreamIndex)
         decodeVideoPacket (packet);
+    //discard subtitles
 //    else
 //        DBG ("Packet is neither audio nor video... stream: " + juce::String (packet->stream_index));
     
@@ -405,7 +405,7 @@ int FFmpegVideoDecodeThread::decodeAudioPacket (AVPacket* packet)
         }
         if (framePTSsecs < 0)
         {
-            DBG("THIS SHOULD NOT HAPPEN: Audio frame has negative pts: " + juce::String(framePTSsecs));
+            DBG("This is really weird and should not happen: Audio frame has negative pts: " + juce::String(framePTSsecs));
             continue;
         }
         
@@ -483,7 +483,7 @@ int FFmpegVideoDecodeThread::decodeVideoPacket (AVPacket* packet)
             
             if (pts_sec < 0.0 )
             {
-                DBG("THIS SHOULD NOT HAPPEN: Video frame has negative pts: " + juce::String(pts_sec));
+                DBG("This is really weird and should not happen: Video frame has negative pts: " + juce::String(pts_sec));
                 continue;
             }
             
@@ -517,7 +517,7 @@ void FFmpegVideoDecodeThread::pauseDecoding()
         if ( !decodingIsPaused )
         {
             waitForDecodingToPause.reset();
-            DBG("Wait for decoding thread to pause...");
+//            DBG("Wait for decoding thread to pause...");
             waitForDecodingToPause.wait(-1);
         }
     }
@@ -543,7 +543,7 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
     int64_t readPosSamples = static_cast<int64_t>(currentPositionSeconds *
         static_cast<double>(formatContext->streams[audioStreamIndex]->time_base.den));
     
-    //seek is true, if a transport source is using the video reader
+    //if a transport source is using the video reader to seek
     if (seek)
     {
         DBG("\n>>>>>>>>>> seeking to position: " + juce::String (newPositionSeconds)
@@ -552,7 +552,7 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
         //start thread if it is seeked for the first time
         if(!isThreadRunning())
         {
-            DBG("starting decoding thread.");
+//            DBG("starting decoding thread.");
             startThread();
             
             //let thread run for a while to see if data arrives
@@ -593,14 +593,14 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
         waitUntilBuffersAreFullEnough.reset();
         waitUntilBuffersAreFullEnough.wait(-1);
 
-        if(!endOfFileReached)
-        {
-            DBG("buffers filled enough after seeking to " + juce::String(newPositionSeconds) + "(s): ");
-        }
-        else
-        {
-            DBG("buffers filled but EOF reached after seeking to " + juce::String(newPositionSeconds) + "(s)");
-        }
+//        if(!endOfFileReached)
+//        {
+//            DBG("buffers filled enough after seeking to " + juce::String(newPositionSeconds) + "(s): ");
+//        }
+//        else
+//        {
+//            DBG("buffers filled but EOF reached after seeking to " + juce::String(newPositionSeconds) + "(s)");
+//        }
         
     }
     
@@ -656,11 +656,6 @@ double FFmpegVideoDecodeThread::getCurrentPositionSeconds () const
 {
     return currentPositionSeconds;
 }
-
-//int64_t FFmpegVideoDecodeThread::getCurrentPTS () const
-//{
-//    return currentPTS;
-//}
 
 int FFmpegVideoDecodeThread::getVideoWidth () const
 {
@@ -801,8 +796,3 @@ void FFmpegVideoDecodeThread::removeVideoListener (FFmpegVideoListener* listener
     videoListeners.remove (listener);
 }
 
-
-//AVCodecContext* CbVideoReader::VideoDecodeThread::getSubtitleContext () const
-//{
-//    return subtitleContext;
-//}

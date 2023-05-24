@@ -1,6 +1,5 @@
 Builds/
-ffmpeg/osx_arm
-ffmpeg/win
-ffmpeg/src/ffmpeg-5.1.2
+ffmpeg
 script_log.txt
 .DS_Store
+JuceLibraryCode

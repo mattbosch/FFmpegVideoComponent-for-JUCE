@@ -15,8 +15,6 @@
       <FILE id="MgJsnn" name="TransportComponent.h" compile="0" resource="0"
             file="Source/TransportComponent.h"/>
       <GROUP id="{DA693F11-878C-8991-43D0-7FBFA5A898DD}" name="cb_ffmpeg">
-        <FILE id="gLXv60" name="FFmpegVideoFramesFIFO.cpp" compile="1" resource="0"
-              file="Source/cb_ffmpeg/FFmpegVideoFramesFIFO.cpp"/>
         <FILE id="ZA7DI2" name="FFmpegVideoFramesFIFO.h" compile="0" resource="0"
               file="Source/cb_ffmpeg/FFmpegVideoFramesFIFO.h"/>
         <FILE id="aBKQSC" name="FFmpegVideoComponent.h" compile="0" resource="0"
@@ -46,14 +44,12 @@
       </GROUP>
     </GROUP>
     <GROUP id="{28B36CDF-AB25-0F02-F003-95F4E42C4904}" name="Scripts">
-      <FILE id="uIH6RQ" name="copy_and_link_libs.sh" compile="0" resource="0"
-            file="Scripts/copy_and_link_libs.sh" xcodeResource="0"/>
       <FILE id="G1qSSy" name="post_build.sh" compile="0" resource="0" file="Scripts/post_build.sh"
             xcodeResource="0"/>
     </GROUP>
     <GROUP id="{7C2D1279-E77E-D1F7-573D-9CD875E9D2E6}" name="Other">
       <FILE id="AXP9L6" name="CONTRIBUTING.md" compile="0" resource="0" file="CONTRIBUTING.md"
-            xcodeResource="1"/>
+            xcodeResource="0"/>
       <FILE id="xwsOK8" name="README.md" compile="0" resource="0" file="README.md"
             xcodeResource="0"/>
     </GROUP>
