@@ -207,7 +207,7 @@ void FFMpegVideoComponent::setPlaySpeed(double newSpeed)
             juce::int64 lastPos = videoReader->getNextReadPosition();
             transportSource->setSource (videoReader.get(), 0, nullptr,
                                         videoReader->getSampleRate() * playSpeed,
-                             videoReader->getNumberOfAudioChannels());
+                                        videoReader->getNumberOfAudioChannels());
             videoReader->setNextReadPosition (lastPos);
             
             if( !isPaused )
