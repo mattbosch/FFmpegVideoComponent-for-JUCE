@@ -44,8 +44,10 @@
       </GROUP>
     </GROUP>
     <GROUP id="{28B36CDF-AB25-0F02-F003-95F4E42C4904}" name="Scripts">
-      <FILE id="G1qSSy" name="post_build.sh" compile="0" resource="0" file="Scripts/post_build.sh"
-            xcodeResource="0"/>
+      <FILE id="LA1dQJ" name="post_build_osx_x86_64.sh" compile="0" resource="1"
+            file="Scripts/post_build_osx_x86_64.sh"/>
+      <FILE id="eteqwI" name="post_build_osx_arm.sh" compile="0" resource="1"
+            file="Scripts/post_build_osx_arm.sh"/>
     </GROUP>
     <GROUP id="{7C2D1279-E77E-D1F7-573D-9CD875E9D2E6}" name="Other">
       <FILE id="AXP9L6" name="CONTRIBUTING.md" compile="0" resource="0" file="CONTRIBUTING.md"
@@ -56,8 +58,8 @@
   </MAINGROUP>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1"/>
   <EXPORTFORMATS>
-    <XCODE_MAC targetFolder="Builds/MacOSX" externalLibraries="avformat&#10;avcodec&#10;avutil&#10;swscale&#10;swresample"
-               xcodeValidArchs="arm64,arm64e" postbuildCommand="#!/bin/sh&#10;&#10;sh ../../Scripts/post_build.sh"
+    <XCODE_MAC targetFolder="Builds/MacOSX_arm" externalLibraries="avformat&#10;avcodec&#10;avutil&#10;swscale&#10;swresample"
+               xcodeValidArchs="arm64,arm64e" postbuildCommand="#!/bin/sh&#10;&#10;sh ../../Scripts/post_build_osx_arm.sh"
                extraDefs="FFMPEG_ROOT=../../ffmpeg/osx_arm&#10;" extraCompilerFlags="-I${FFMPEG_ROOT}/include"
                extraLinkerFlags="-L${FFMPEG_ROOT}/lib&#10;">
       <CONFIGURATIONS>
@@ -77,6 +79,28 @@
         <MODULEPATH id="juce_audio_devices" path="../../JUCE/modules"/>
         <MODULEPATH id="juce_audio_utils" path="../../JUCE/modules"/>
         <MODULEPATH id="juce_audio_formats" path="../../JUCE/modules"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
+    <XCODE_MAC targetFolder="Builds/MacOSX_x86_64" extraDefs="FFMPEG_ROOT=../../ffmpeg/osx_x86_64&#10;"
+               extraCompilerFlags="-I${FFMPEG_ROOT}/include" extraLinkerFlags="-L${FFMPEG_ROOT}/lib&#10;"
+               externalLibraries="avformat&#10;avcodec&#10;avutil&#10;swscale&#10;swresample"
+               xcodeValidArchs="x86_64" postbuildCommand="#!/bin/sh&#10;&#10;sh ../../Scripts/post_build_osx_x86_64.sh">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="FFmpegVideoComponent"/>
+        <CONFIGURATION isDebug="0" name="Release"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="~/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="~/JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
     <VS2022 targetFolder="Builds/VisualStudio2022" extraCompilerFlags="-I${FFMPEG_ROOT}/include&#10;"
