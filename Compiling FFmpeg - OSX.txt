@@ -61,17 +61,13 @@ make clean
 # - arm as architecture, use "--arch=x86_64" for intel, don't forget adjust the prefix!
 #
 # Run one of the following commands:
-#
-#### minimal configuration: very specific about decodersm muxers, parsers. bsfs untouched ####
-## for arm-architecture
-./configure --prefix='../../osx_arm' --install-name-dir='@executable_path/../libs' --extra-ldflags=-Wl,-rpath,'@executable_path/../libs' --cc=/usr/bin/clang --disable-filters --disable-programs --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages --enable-version3 --disable-static  --enable-shared --enable-avdevice --enable-avcodec --enable-avformat --enable-swresample --enable-swscale --enable-avfilter --disable-libjack --disable-libopencore-amrnb --disable-libopencore-amrwb --disable-libxcb --disable-libxcb-shm --disable-libxcb-xfixes --disable-indev=jack --disable-outdev=xv --enable-audiotoolbox --enable-videotoolbox --disable-securetransport --enable-pthreads --disable-protocols --enable-protocol='file' --disable-muxers --disable-decoders --enable-decoder='h264'  --disable-demuxers --enable-demuxer='h264,mov' --disable-parsers --enable-parser='aac,h264,mpeg4video,mpegaudio,mpegvideo'
-## for intel-architecture
-./configure --arch=x86_64 --prefix='../../osx_x86_64' --install-name-dir='@executable_path/../libs' --extra-ldflags=-Wl,-rpath,'@executable_path/../libs' --cc='clang -arch x86_64' --disable-filters --disable-programs --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages --enable-version3 --disable-static  --enable-shared --enable-avdevice --enable-avcodec --enable-avformat --enable-swresample --enable-swscale --enable-avfilter --disable-libjack --disable-libopencore-amrnb --disable-libopencore-amrwb --disable-libxcb --disable-libxcb-shm --disable-libxcb-xfixes --disable-indev=jack --disable-outdev=xv --enable-audiotoolbox --enable-videotoolbox --disable-securetransport --enable-pthreads --disable-protocols --enable-protocol='file' --disable-muxers --disable-decoders --enable-decoder='h264'  --disable-demuxers --enable-demuxer='h264,mov' --disable-parsers --enable-parser='aac,h264,mpeg4video,mpegaudio,mpegvideo'
 
-
-#### "normal" configuration: all decoders, all demuxers, all parsers ####
+###################################################################################
+#### OSX, arm, "normal" configuration: all decoders, all demuxers, all parsers ####
+###################################################################################
 ./configure --prefix='../../osx_arm' \
 --install-name-dir='@executable_path/../libs' \
+--extra-cflags=-mmacosx-version-min=10.10 \
 --extra-ldflags=-Wl,-rpath,'@executable_path/../libs' \
 --cc=/usr/bin/clang \
 --disable-filters \
@@ -104,6 +100,48 @@ make clean
 --enable-pthreads \
 --disable-protocols \
 --enable-protocol='file'
+
+
+######################################################################################
+#### OSX, x86_64, "normal" configuration: all decoders, all demuxers, all parsers ####
+######################################################################################
+./configure --prefix='../../osx_x86_64' \
+--arch=x86_64 \
+--install-name-dir='@executable_path/../libs' \
+--extra-cflags=-mmacosx-version-min=10.10 \
+--extra-ldflags=-Wl,-rpath,'@executable_path/../libs' \
+--cc='clang -arch x86_64'
+--disable-filters \
+--disable-programs \
+--disable-doc \
+--disable-htmlpages \
+--disable-manpages \
+--disable-podpages \
+--disable-txtpages \
+--enable-version3 \
+--disable-static  \
+--enable-shared \
+--enable-avdevice \
+--enable-avcodec \
+--enable-avformat \
+--enable-swresample \
+--enable-swscale \
+--enable-avfilter \
+--disable-libjack \
+--disable-libopencore-amrnb \
+--disable-libopencore-amrwb \
+--disable-libxcb \
+--disable-libxcb-shm \
+--disable-libxcb-xfixes \
+--disable-indev=jack \
+--disable-outdev=xv \
+--enable-audiotoolbox \
+--enable-videotoolbox \
+--disable-securetransport \
+--enable-pthreads \
+--disable-protocols \
+--enable-protocol='file'
+
 
     discarded: --disable-muxers --disable-decoders --enable-decoder='h264' --disable-demuxers --enable-demuxer='h264,mov' --disable-parsers --enable-parser='aac,h264,mpeg4video,mpegaudio,mpegvideo'
 
