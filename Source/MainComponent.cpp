@@ -13,6 +13,14 @@ MainComponent::MainComponent()
     transportComponent->setVideoComponent(ffmpegVideoComponent.get());
     ffmpegVideoComponent->getVideoReader()->addVideoListener(transportComponent.get());
     addAndMakeVisible(transportComponent.get());
+    
+    ffmpegVideoComponent->onPlaybackStarted = [this](){
+        DBG("onPlaybackStarted: callback");
+    };
+    
+    ffmpegVideoComponent->onPlaybackStopped = [this](){
+        DBG("onPlaybackStarted: onPlaybackStopped");
+    };
 
     setSize (800, 600);
 }

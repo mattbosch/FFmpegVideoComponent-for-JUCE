@@ -24,6 +24,9 @@ FFmpegVideoComponent::FFmpegVideoComponent()
     transportSource->setSource (videoReader.get(), 0, nullptr);
 
     setAudioChannels (0, 2);
+    
+    onPlaybackStarted = [this](){};
+    onPlaybackStopped = [this](){};
 
 //    if (juce::AudioIODevice* device = deviceManager.getCurrentAudioDevice())
 //    {
