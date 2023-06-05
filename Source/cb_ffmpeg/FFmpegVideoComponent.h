@@ -124,6 +124,10 @@ public:
     /** callback from video reader when playback has ended  */
     void videoEnded() override;
 
+    std::function< void()> 	onPlaybackStarted;
+    std::function< void()> 	onPlaybackStopped;
+    std::function< void(const juce::String&)> 	onErrorOccurred;
+
     
 private:
     /*! This transport source provides basic transport capabilities using the video reader as source  */

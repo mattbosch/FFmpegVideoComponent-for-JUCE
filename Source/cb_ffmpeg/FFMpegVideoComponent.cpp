@@ -229,6 +229,7 @@ void FFmpegVideoComponent::play()
         transportSource->start();
         isPaused = false;
     }
+    onPlaybackStarted();
 }
 
 void FFmpegVideoComponent::setPlayPosition(double newPositionSeconds)
@@ -265,6 +266,7 @@ void FFmpegVideoComponent::stop()
         transportSource->stop();
         isPaused = true;
     }
+    onPlaybackStopped();
 }
 
 bool FFmpegVideoComponent::isPlaying() const
