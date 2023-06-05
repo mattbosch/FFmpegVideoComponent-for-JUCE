@@ -89,6 +89,8 @@ public:
     
     juce::Result load(const juce::File &file);
     bool isVideoOpen() const;
+    void closeVideo();
+    
     double getVideoDuration() const;
     void play();
     void setPlayPosition(double newPositionSeconds);

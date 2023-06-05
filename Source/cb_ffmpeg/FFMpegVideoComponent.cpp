@@ -183,6 +183,16 @@ juce::Result FFmpegVideoComponent::load(const juce::File &file)
     }
 }
 
+void FFmpegVideoComponent::closeVideo()
+{
+    if ( videoReader )
+    {
+        videoReader->closeVideoFile();
+        currentAVFrame = nullptr;
+        currentFrameAsImage = juce::Image();
+    }
+}
+
 bool FFmpegVideoComponent::isVideoOpen() const
 {
     return videoReader->isVideoOpen();
@@ -288,7 +298,7 @@ bool FFmpegVideoComponent::isPlaying() const
 void FFmpegVideoComponent::timerCallback ()
 {
     if (!frameWasPainted) {
-        //DBG("Drawing Frame...");
+//        DBG("Drawing Frame...");
         repaint ();
         frameWasPainted = true;
     }
