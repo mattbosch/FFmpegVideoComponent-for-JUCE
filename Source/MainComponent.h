@@ -24,7 +24,7 @@ public:
     void resized() override;
     
 private:
-    std::unique_ptr<FFMpegVideoComponent> ffmpegVideoComponent;
+    std::unique_ptr<FFmpegVideoComponent> ffmpegVideoComponent;
     std::unique_ptr<TransportComponent> transportComponent;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)

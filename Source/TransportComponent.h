@@ -5,7 +5,7 @@
 #include "cb_ffmpeg/FFmpegVideoListener.h"
 
 class MainComponent;
-class FFMpegVideoComponent;
+class FFmpegVideoComponent;
 
 /*!
  */
@@ -17,7 +17,7 @@ class TransportComponent
 , public FFmpegVideoListener
 {
     friend class MainComponent;
-    friend class FFMpegVideoComponent;
+    friend class FFmpegVideoComponent;
 protected:
     bool isMinimalized = false;
     
@@ -31,7 +31,7 @@ protected:
     juce::Slider positionSlider;
     juce::Label positionLabel;
     
-    FFMpegVideoComponent* videoScreenComponent;
+    FFmpegVideoComponent* videoScreenComponent;
     MainComponent* mainComponent;
     
     /*! Update interval for animated graphical elements (i.e. position slider) */
@@ -60,8 +60,8 @@ public:
     void timerCallback() override;
     
     
-    FFMpegVideoComponent* getVideoComponent();
-    void setVideoComponent (FFMpegVideoComponent* videoScreenComp);
+    FFmpegVideoComponent* getVideoComponent();
+    void setVideoComponent (FFmpegVideoComponent* videoScreenComp);
     
     MainComponent* getMainComponent();
     void setMainComponent (MainComponent* mainComp);

@@ -6,7 +6,7 @@
 #define VIDEO_FRAME_BUFFER_SIZE  102    // a bit more as 4 seconds at 25 FPS
 
 //==============================================================================
-FFMpegVideoComponent::FFMpegVideoComponent()
+FFmpegVideoComponent::FFmpegVideoComponent()
     : transportSource(new juce::AudioTransportSource)
 , videoReader(new FFmpegVideoReader (AUDIO_BUFFER_SIZE, VIDEO_FRAME_BUFFER_SIZE))
     , currentAVFrame(nullptr)
@@ -37,7 +37,7 @@ FFMpegVideoComponent::FFMpegVideoComponent()
 }
 
 
-FFMpegVideoComponent::~FFMpegVideoComponent()
+FFmpegVideoComponent::~FFmpegVideoComponent()
 {
     if (videoReader)
         videoReader->removeVideoListener (this);
@@ -48,7 +48,7 @@ FFMpegVideoComponent::~FFMpegVideoComponent()
     shutdownAudio();
 }
 
-void FFMpegVideoComponent::paint (juce::Graphics& g)
+void FFmpegVideoComponent::paint (juce::Graphics& g)
 {
     //convert video frame to image and paint it
     g.fillAll (juce::Colours::black);
@@ -77,7 +77,7 @@ void FFMpegVideoComponent::paint (juce::Graphics& g)
     }
 }
 
-void FFMpegVideoComponent::resized()
+void FFmpegVideoComponent::resized()
 {
     if (!videoReader)
         return;
@@ -102,7 +102,7 @@ void FFMpegVideoComponent::resized()
     }
 }
 
-FFmpegVideoReader* FFMpegVideoComponent::getVideoReader() const
+FFmpegVideoReader* FFmpegVideoComponent::getVideoReader() const
 {
     return videoReader.get();
 }
@@ -111,7 +111,7 @@ FFmpegVideoReader* FFMpegVideoComponent::getVideoReader() const
 //juce::AudioTransportSource ***********************************
 //**************************************************************
 
-void FFMpegVideoComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
+void FFmpegVideoComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
 {
 //    DBG("FFMpegVideoComponent: prepareToPlay, SR: " + juce::String(sampleRate) );
     readBuffer.setSize (2, samplesPerBlockExpected);
@@ -122,12 +122,12 @@ void FFMpegVideoComponent::prepareToPlay (int samplesPerBlockExpected, double sa
 
 }
 
-void FFMpegVideoComponent::releaseResources()
+void FFmpegVideoComponent::releaseResources()
 {
 //    DBG("FFMpegVideoComponent::releaseResources()");
 }
 
-void FFMpegVideoComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
+void FFmpegVideoComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
 {
     auto numInputChannels = videoReader->getNumberOfAudioChannels();
 
@@ -167,7 +167,7 @@ void FFMpegVideoComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo
 //**************************************************************
 
 
-juce::Result FFMpegVideoComponent::load(const juce::File &file)
+juce::Result FFmpegVideoComponent::load(const juce::File &file)
 {
     transportSource->stop();
     if ( videoReader->loadVideoFile (file) )
@@ -180,12 +180,12 @@ juce::Result FFMpegVideoComponent::load(const juce::File &file)
     }
 }
 
-bool FFMpegVideoComponent::isVideoOpen() const
+bool FFmpegVideoComponent::isVideoOpen() const
 {
     return videoReader->isVideoOpen();
 }
 
-double FFMpegVideoComponent::getVideoDuration() const
+double FFmpegVideoComponent::getVideoDuration() const
 {
     if (videoReader)
         return videoReader->getDuration();
@@ -193,7 +193,7 @@ double FFMpegVideoComponent::getVideoDuration() const
         return -1.0;
 }
 
-void FFMpegVideoComponent::setPlaySpeed(double newSpeed)
+void FFmpegVideoComponent::setPlaySpeed(double newSpeed)
 {
     //to change playback speed transport needs to be stopped and reset with new speed
     if ( newSpeed != playSpeed)
@@ -216,12 +216,12 @@ void FFMpegVideoComponent::setPlaySpeed(double newSpeed)
     }
 }
 
-double FFMpegVideoComponent::getPlaySpeed() const
+double FFmpegVideoComponent::getPlaySpeed() const
 {
     return playSpeed;
 }
 
-void FFMpegVideoComponent::play()
+void FFmpegVideoComponent::play()
 {
     DBG("FFMpegVideoComponent::play() at " + StringHelper::convertSecondsToTimeString(getPlayPosition()));
     if ( isPaused && !isPlaying())
@@ -231,7 +231,7 @@ void FFMpegVideoComponent::play()
     }
 }
 
-void FFMpegVideoComponent::setPlayPosition(double newPositionSeconds)
+void FFmpegVideoComponent::setPlayPosition(double newPositionSeconds)
 {
     DBG("FFMpegVideoComponent::setPlayPosition(" + juce::String(newPositionSeconds) + ")");
     
@@ -248,7 +248,7 @@ void FFMpegVideoComponent::setPlayPosition(double newPositionSeconds)
     }
 }
 
-double FFMpegVideoComponent::getPlayPosition() const
+double FFmpegVideoComponent::getPlayPosition() const
 {
     return transportSource->getCurrentPosition();
 }
@@ -257,7 +257,7 @@ double FFMpegVideoComponent::getPlayPosition() const
 //juce::VideoComponent and  juce::AudioTransportSource *********
 //**************************************************************
 
-void FFMpegVideoComponent::stop()
+void FFmpegVideoComponent::stop()
 {
     DBG("FFMpegVideoComponent::stop() at " + StringHelper::convertSecondsToTimeString(getPlayPosition()));
     if ( isPlaying() && !isPaused && isVideoOpen())
@@ -267,7 +267,7 @@ void FFMpegVideoComponent::stop()
     }
 }
 
-bool FFMpegVideoComponent::isPlaying() const
+bool FFmpegVideoComponent::isPlaying() const
 {
     if ( isVideoOpen() )
         return transportSource->isPlaying();
@@ -280,7 +280,7 @@ bool FFMpegVideoComponent::isPlaying() const
 //**************************************************************
 
 
-void FFMpegVideoComponent::timerCallback ()
+void FFmpegVideoComponent::timerCallback ()
 {
     if (!frameWasPainted) {
         //DBG("Drawing Frame...");
@@ -289,7 +289,7 @@ void FFMpegVideoComponent::timerCallback ()
     }
 }
 
-void FFMpegVideoComponent::videoSizeChanged (const int width, const int height, const AVPixelFormat format)
+void FFmpegVideoComponent::videoSizeChanged (const int width, const int height, const AVPixelFormat format)
 {
     //This should only happen if another video with a different resolution is loaded
     resized();
@@ -297,7 +297,7 @@ void FFMpegVideoComponent::videoSizeChanged (const int width, const int height, 
 }
 
 
-void FFMpegVideoComponent::videoFileChanged (const juce::File& video)
+void FFmpegVideoComponent::videoFileChanged (const juce::File& video)
 {
     isPaused = true;
     DBG("FFMpegVideoComponent: Video file changed...");
@@ -327,7 +327,7 @@ void FFMpegVideoComponent::videoFileChanged (const juce::File& video)
     resized ();
 }
 
-void FFMpegVideoComponent::displayNewFrame (const AVFrame* frame)
+void FFmpegVideoComponent::displayNewFrame (const AVFrame* frame)
 {
     double frameSeconds = static_cast<double>(frame->pts) / videoReader->getVideoTimeBase().den;
         
@@ -343,12 +343,12 @@ void FFMpegVideoComponent::displayNewFrame (const AVFrame* frame)
     }
 }
 
-void FFMpegVideoComponent::positionSecondsChanged (const double pts)
+void FFmpegVideoComponent::positionSecondsChanged (const double pts)
 {
 
 }
 
-void FFMpegVideoComponent::videoEnded()
+void FFmpegVideoComponent::videoEnded()
 {
     DBG("FFMpegVideoComponent: video has ended...");
 }

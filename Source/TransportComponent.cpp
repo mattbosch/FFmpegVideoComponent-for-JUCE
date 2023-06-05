@@ -58,12 +58,12 @@ TransportComponent::~TransportComponent()
 
 }
 
-FFMpegVideoComponent* TransportComponent::getVideoComponent()
+FFmpegVideoComponent* TransportComponent::getVideoComponent()
 {
     return videoScreenComponent;
 }
 
-void TransportComponent::setVideoComponent (FFMpegVideoComponent* videoScreenComp)
+void TransportComponent::setVideoComponent (FFmpegVideoComponent* videoScreenComp)
 {
     videoScreenComponent = videoScreenComp;
 }

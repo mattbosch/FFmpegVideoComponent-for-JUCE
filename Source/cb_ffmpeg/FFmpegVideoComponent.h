@@ -61,14 +61,14 @@ SOFTWARE
 
 //==============================================================================
 
-class FFMpegVideoComponent  :
+class FFmpegVideoComponent  :
     public juce::Timer,
     public juce::AudioAppComponent,
     public FFmpegVideoListener
 {
 public:
-    FFMpegVideoComponent();
-    ~FFMpegVideoComponent() override;
+    FFmpegVideoComponent();
+    ~FFmpegVideoComponent() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -151,5 +151,5 @@ private:
     
     bool isPaused = false;
         
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FFMpegVideoComponent)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FFmpegVideoComponent)
 };

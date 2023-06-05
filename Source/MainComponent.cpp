@@ -5,7 +5,7 @@ MainComponent::MainComponent()
 {
     setWantsKeyboardFocus (true);
 
-    ffmpegVideoComponent = std::unique_ptr<FFMpegVideoComponent> ( new FFMpegVideoComponent () );
+    ffmpegVideoComponent = std::unique_ptr<FFmpegVideoComponent> ( new FFmpegVideoComponent () );
     addAndMakeVisible(ffmpegVideoComponent.get());
     
     transportComponent = std::unique_ptr<TransportComponent> ( new TransportComponent () );
