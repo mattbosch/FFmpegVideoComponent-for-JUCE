@@ -125,7 +125,7 @@ public:
     void videoEnded() override;
 
     std::function< void()> 	onPlaybackStarted;
-    std::function< void()> 	onPlaybackStopped;
+    std::function< void()> 	onPlaybackStopped; 
     std::function< void(const juce::String&)> 	onErrorOccurred;
 
     
