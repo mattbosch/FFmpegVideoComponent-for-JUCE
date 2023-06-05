@@ -110,7 +110,7 @@ make clean
 --install-name-dir='@executable_path/../libs' \
 --extra-cflags=-mmacosx-version-min=10.10 \
 --extra-ldflags=-Wl,-rpath,'@executable_path/../libs' \
---cc='clang -arch x86_64'
+--cc='clang -arch x86_64' \
 --disable-filters \
 --disable-programs \
 --disable-doc \
