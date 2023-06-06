@@ -249,17 +249,17 @@ void FFmpegVideoComponent::setPlayPosition(double newPositionSeconds)
 {
     DBG("FFMpegVideoComponent::setPlayPosition(" + juce::String(newPositionSeconds) + ")");
     
-    if (isVideoOpen())
-    {
-        if ( !isPaused )
-            transportSource->stop();
-        
-        //set position directly in video reader since the the transport source does not compensate for playback speed
-        videoReader->setNextReadPosition (newPositionSeconds * videoReader->getSampleRate());
+    if (!isVideoOpen())
+        return;
 
-        if (!isPaused)
-            transportSource->start();
-    }
+    if ( !isPaused )
+        transportSource->stop();
+    
+    //set position directly in video reader since the the transport source does not compensate for playback speed
+    videoReader->setNextReadPosition (newPositionSeconds * videoReader->getSampleRate());
+
+    if (!isPaused)
+        transportSource->start();
 }
 
 double FFmpegVideoComponent::getPlayPosition() const
@@ -366,5 +366,6 @@ void FFmpegVideoComponent::positionSecondsChanged (const double pts)
 void FFmpegVideoComponent::videoEnded()
 {
     DBG("FFMpegVideoComponent: video has ended...");
+    onPlaybackStopped();
 }
 

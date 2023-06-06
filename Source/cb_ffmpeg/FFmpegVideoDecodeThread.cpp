@@ -608,7 +608,7 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
 
     //if there are no frames available
     if (videoFramesFifo.countNewFrames() <= 0) {
-        DBG ("No frame available at " + juce::String(newPositionSeconds));
+        DBG ("No frame available at " + juce::String(newPositionSeconds) + " : " + juce::String(getDuration()));
         return;
     }
 
