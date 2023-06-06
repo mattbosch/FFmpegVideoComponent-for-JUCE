@@ -329,7 +329,7 @@ void FFmpegVideoComponent::videoFileChanged (const juce::File& video)
                         videoReader->getNumberOfAudioChannels());
         
         //TODO: this should not be necessary, because transportSource->setSource(...) already calls
-        //setPlayPosition(0.0), but for some reason, the first attempt to set position results in
+        //setPlayPosition(0.0), but for some reason, the first attempt to set the position results in
         //audio playback being ahead of image data.
         setPlayPosition(0.0);
     }

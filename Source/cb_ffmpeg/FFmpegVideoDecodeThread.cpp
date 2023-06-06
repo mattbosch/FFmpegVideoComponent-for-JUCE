@@ -606,42 +606,44 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
     
     videoListeners.call (&FFmpegVideoListener::positionSecondsChanged, newPositionSeconds);
 
-    //if there are no frames available
-    if (videoFramesFifo.countNewFrames() <= 0) {
-        DBG ("No frame available at " + juce::String(newPositionSeconds) + " : " + juce::String(getDuration()));
-        return;
-    }
-
-    //Try to find the position of the current video frame in FIFO, starting at read position. The current frame might
-    //not be the next frame in fifo. Frames before the current frame must be dropped.
-    auto currentFramePositionOffset = videoFramesFifo.findOffsetForSeconds(newPositionSeconds);
-
-    //if frame found or it was seeked
-    if (currentFramePositionOffset > 0 || seek)
+    //if there are frames available
+    if (videoFramesFifo.countNewFrames() > 0)
     {
-        //TODO: see, if this really happens with some videos
-        if (currentFramePositionOffset > 1)
-            DBG ("Dropped " + juce::String (currentFramePositionOffset-1) + " frame(s).");
-        
-        //get frame
-        AVFrame* nextFrame = videoFramesFifo.getFrameAtReadIndex();
-        
-        //Debug
-//        double frameSeconds = static_cast<double>(nextFrame->pts) /
-//            static_cast<double>(formatContext->streams[videoStreamIndex]->time_base.den);
-//        if( (endOfFileReached && frameSeconds >= getDuration() - 0.25 ) /*|| frameSeconds <= 0.5*/ )
-//        {
-//            DBG(  "Update Frame " + juce::String(frameSeconds) + "/" + juce::String(getDuration()) + ", "
-//                + "pos: " + juce::String(currentPositionSeconds) + ", "
-//                + "fifo-index: " + juce::String(videoFramesFifo2.getReadIndex()) + ", "
-//                + "frames left: " + juce::String(videoFramesFifo2.countNewFrames()) + ""
-//                );
-//        }
-        
-        videoFramesFifo.advanceReadIndex();
-        
-        //provide listeners with current frame
-        videoListeners.call (&FFmpegVideoListener::displayNewFrame, nextFrame);
+        //Try to find the position of the current video frame in FIFO, starting at read position. The current frame might
+        //not be the next frame in fifo. Frames before the current frame must be dropped.
+        auto currentFramePositionOffset = videoFramesFifo.findOffsetForSeconds(newPositionSeconds);
+
+        //if frame found or it was seeked
+        if (currentFramePositionOffset > 0 || seek)
+        {
+            //TODO: see, if this really happens with some videos
+            if (currentFramePositionOffset > 1)
+                DBG ("Dropped " + juce::String (currentFramePositionOffset-1) + " frame(s).");
+            
+            //get frame
+            AVFrame* nextFrame = videoFramesFifo.getFrameAtReadIndex();
+            
+            //Debug
+//            double frameSeconds = static_cast<double>(nextFrame->pts) /
+//                static_cast<double>(formatContext->streams[videoStreamIndex]->time_base.den);
+//            if( (endOfFileReached && frameSeconds >= getDuration() - 0.25 ) /*|| frameSeconds <= 0.5*/ )
+//            {
+//                DBG(  "Update Frame " + juce::String(frameSeconds) + "/" + juce::String(getDuration()) + ", "
+//                    + "pos: " + juce::String(currentPositionSeconds) + ", "
+//                    + "fifo-index: " + juce::String(videoFramesFifo2.getReadIndex()) + ", "
+//                    + "frames left: " + juce::String(videoFramesFifo2.countNewFrames()) + ""
+//                    );
+//            }
+            
+            videoFramesFifo.advanceReadIndex();
+            
+            //provide listeners with current frame
+            videoListeners.call (&FFmpegVideoListener::displayNewFrame, nextFrame);
+        }
+    }
+    else
+    {
+        DBG ("No frame available at " + juce::String(newPositionSeconds) + " : " + juce::String(getDuration()));
     }
 
     //if the decoding method has reached the end of file and if the last frame has been displayed
