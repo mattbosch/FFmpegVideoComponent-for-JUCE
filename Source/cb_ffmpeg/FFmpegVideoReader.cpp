@@ -90,6 +90,13 @@ void FFmpegVideoReader::getNextAudioBlock (const juce::AudioSourceChannelInfo &b
     }
 
     nextReadPos += bufferToFill.numSamples;
+    
+    //if the decoding thread has reached the end of file and the next read position is larger then total length
+    if(endOfFileReached && nextReadPos >= getTotalLength())
+    {
+        DBG("End at position: " + juce::String(static_cast<double>(nextReadPos) / static_cast<double>(getSampleRate())));
+        videoListeners.call (&FFmpegVideoListener::videoEnded);
+    }
 }
 
 bool FFmpegVideoReader::waitForNextAudioBlockReady (const juce::AudioSourceChannelInfo &bufferToFill, const int msecs) const

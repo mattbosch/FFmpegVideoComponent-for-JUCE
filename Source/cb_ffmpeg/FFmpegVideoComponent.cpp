@@ -25,8 +25,8 @@ FFmpegVideoComponent::FFmpegVideoComponent()
 
     setAudioChannels (0, 2);
     
-    onPlaybackStarted = [this](){};
-    onPlaybackStopped = [this](){};
+    onPlaybackStarted = nullptr;
+    onPlaybackStopped = nullptr;
 
 //    if (juce::AudioIODevice* device = deviceManager.getCurrentAudioDevice())
 //    {
@@ -241,8 +241,15 @@ void FFmpegVideoComponent::play()
     {
         transportSource->start();
         isPaused = false;
+        //invoke callback for onPlaybackStarted, this must be thread safe
+        if ( onPlaybackStarted != nullptr )
+        {
+            if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+                onPlaybackStarted();
+            else
+                juce::MessageManager::callAsync(std::move(onPlaybackStarted));
+        }
     }
-    onPlaybackStarted();
 }
 
 void FFmpegVideoComponent::setPlayPosition(double newPositionSeconds)
@@ -278,8 +285,15 @@ void FFmpegVideoComponent::stop()
     {
         transportSource->stop();
         isPaused = true;
+        //invoke callback for onPlaybackStopped, this must be thread safe
+        if ( onPlaybackStopped != nullptr )
+        {
+            if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+                onPlaybackStopped();
+            else
+                juce::MessageManager::callAsync(std::move(onPlaybackStopped));
+        }
     }
-    onPlaybackStopped();
 }
 
 bool FFmpegVideoComponent::isPlaying() const
@@ -366,6 +380,13 @@ void FFmpegVideoComponent::positionSecondsChanged (const double pts)
 void FFmpegVideoComponent::videoEnded()
 {
     DBG("FFMpegVideoComponent: video has ended...");
-    onPlaybackStopped();
+    //invoke callback for onPlaybackStopped, this must be thread safe
+    if (onPlaybackStopped != nullptr )
+    {
+        if (juce::MessageManager::getInstance()->isThisTheMessageThread())
+            onPlaybackStopped();
+        else
+            juce::MessageManager::callAsync(std::move(onPlaybackStopped));
+    }
 }
 
