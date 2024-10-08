@@ -225,14 +225,14 @@ void FFmpegMediaDecodeThread::run()
         if (decodingShouldPause)
         {
             //pause decoding and signal that it has stopped
-//            DBG("\tDecoding paused...");
+            //DBG("\tDecoding paused...");
             decodingIsPaused = true;
             waitForDecodingToPause.signal();
             //wait until continue signal
-//            DBG("Wait until thread is continued...");
+            //DBG("Wait until thread is continued...");
             waitUntilContinue.reset();
             waitUntilContinue.wait(-1);
-//            DBG("\tDecoding continued...");
+            //DBG("\tDecoding continued...");
         }
         if (!decodingIsPaused)
         {
@@ -252,7 +252,7 @@ void FFmpegMediaDecodeThread::run()
                     if (!_firstDataHasArrived)
                     {
                         _firstDataHasArrived = true;
-//                        DBG("Buffers are filled enough...");
+                        //DBG("Buffers are filled enough...");
                     }
                     waitUntilBuffersAreFullEnough.signal();
                 }
@@ -261,7 +261,7 @@ void FFmpegMediaDecodeThread::run()
                     if (!_firstDataHasArrived)
                     {
                         _firstDataHasArrived = true;
-//                        DBG("First data has arrived...");
+                        //DBG("First data has arrived...");
                     }
                     waitForFirstData.signal();
                 }
@@ -276,7 +276,7 @@ void FFmpegMediaDecodeThread::run()
                     {
                         if ( ! endOfFileReached )
                         {
-//                            DBG("Decoding Thread has reached end of file.");
+                            DBG("Decoding Thread has reached end of file.");
                             endOfFileReached = true;
                             waitUntilBuffersAreFullEnough.signal();
                         }
@@ -299,7 +299,7 @@ void FFmpegMediaDecodeThread::run()
                 {
                     bufferingStopped = true;
 //                    waitUntilBuffersAreFullEnough.signal();
-//                    DBG("Buffering stopped, buffered video frames: " + juce::String(newFramesCount));
+                    //DBG("Buffering stopped, buffered video frames: " + juce::String(newFramesCount));
                 }
                 waitUntilBuffersAreFullEnough.signal();
                 wait (20);
@@ -307,7 +307,7 @@ void FFmpegMediaDecodeThread::run()
         }
 
     }
-//    DBG("VideoDecodeThread has stopped...");
+    //DBG("VideoDecodeThread has stopped...");
 }
 
 int FFmpegMediaDecodeThread::readAndDecodePacket()
@@ -334,8 +334,11 @@ int FFmpegMediaDecodeThread::readAndDecodePacket()
             //drained. Draining is initiated by sending NULL to contexts.
             //see https://www.ffmpeg.org/doxygen/3.4/group__lavc__encdec.html
             //or https://github.com/microsoft/FFmpegInterop/issues/217
-            decodeAudioPacket (NULL);
-            decodeVideoPacket (NULL);
+            // Flush decoders only if the streams exist
+            if (audioStreamIndex >= 0)
+                decodeAudioPacket(NULL);
+            if (videoStreamIndex >= 0)
+                decodeVideoPacket(NULL);
             av_packet_unref (packet);
             return AVERROR_EOF;
         }
@@ -362,6 +365,9 @@ int FFmpegMediaDecodeThread::readAndDecodePacket()
 
 int FFmpegMediaDecodeThread::decodeAudioPacket (AVPacket* packet)
 {
+    if (!audioContext)
+        return 0;
+    
     //count groups of video frames
     if (countVideoFrames > 0 )
     {
@@ -436,8 +442,11 @@ int FFmpegMediaDecodeThread::decodeAudioPacket (AVPacket* packet)
 
 int FFmpegMediaDecodeThread::decodeVideoPacket (AVPacket* packet)
 {
+    if (!videoContext)
+        return 0;
+    
     //count groups of audio frames
-    if ( countAudioFrames > 0)
+    if (countAudioFrames > 0)
     {
         countAudioFrameGroups++;
         countAudioFrames = 0;
@@ -635,7 +644,7 @@ void FFmpegMediaDecodeThread::setPositionSeconds (const double newPositionSecond
         //if frame found or it was seeked
         if (currentFramePositionOffset > 0 || seek)
         {
-            //TODO: see, if this really happens with some videos
+            //TODO: see if this really happens with some videos
             if (currentFramePositionOffset > 1)
                 DBG ("Dropped " + juce::String (currentFramePositionOffset-1) + " frame(s).");
             
@@ -662,7 +671,9 @@ void FFmpegMediaDecodeThread::setPositionSeconds (const double newPositionSecond
     }
     else
     {
-        DBG ("No frame available at " + juce::String(newPositionSeconds) + " : " + juce::String(getDuration()));
+        if (getVideoContext() != nullptr) {
+            DBG ("No frame available at " + juce::String(newPositionSeconds) + " : " + juce::String(getDuration()));
+        }
     }
 
     //if the decoding method has reached the end of file and if the last frame has been displayed
