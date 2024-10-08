@@ -17,7 +17,7 @@ audioFifo (fifo),
 currentPositionSeconds (0.0)
 {
     audioFrame = av_frame_alloc();
-    _isVideoOpen = false;
+    _isMediaOpen = false;
     endOfFileReached = false;
     
     waitForDecodingToPause.reset();
@@ -91,21 +91,21 @@ int FFmpegMediaDecodeThread::loadMediaFile(const juce::File &inputFile)
     //if there is already a context open, close it
     if (formatContext) {
         closeMediaFile ();
-        videoFile = juce::File();
+        mediaFile = juce::File();
     }
 
     // open input file, and allocate format context
     int errorCode = avformat_open_input (&formatContext, inputFile.getFullPathName().toRawUTF8(), NULL, NULL);
     if (errorCode < 0) {
         DBG ("Opening file failed");
-        _isVideoOpen = false;
+        _isMediaOpen = false;
         return -1;
     }
 
     // try to get stream infos
     if (avformat_find_stream_info (formatContext, NULL) < 0)
     {
-        _isVideoOpen = false;
+        _isMediaOpen = false;
         return false;
     }
     
@@ -166,8 +166,8 @@ int FFmpegMediaDecodeThread::loadMediaFile(const juce::File &inputFile)
     audioFifo.reset();
     videoFramesFifo.reset();
 
-    videoFile = inputFile;
-    _isVideoOpen = true;
+    mediaFile = inputFile;
+    _isMediaOpen = true;
     
     waitForDecodingToPause.reset();
     waitUntilContinue.reset();
@@ -196,7 +196,7 @@ void FFmpegMediaDecodeThread::closeMediaFile()
         swr_free(&audioConverterContext);
     }
     avformat_close_input (&formatContext);
-    _isVideoOpen = false;
+    _isMediaOpen = false;
     
     videoFramesFifo.reset();
     audioFifo.reset();
@@ -204,7 +204,7 @@ void FFmpegMediaDecodeThread::closeMediaFile()
 
 juce::File FFmpegMediaDecodeThread::getMediaFile () const
 {
-    return videoFile;
+    return mediaFile;
 }
 
 void FFmpegMediaDecodeThread::run()
@@ -815,7 +815,7 @@ AVCodecContext* FFmpegMediaDecodeThread::getAudioContext () const
 
 bool FFmpegMediaDecodeThread::isMediaOpen() const
 {
-    return _isVideoOpen;
+    return _isMediaOpen;
 }
 
 void FFmpegMediaDecodeThread::addVideoListener (FFmpegVideoListener* listener)

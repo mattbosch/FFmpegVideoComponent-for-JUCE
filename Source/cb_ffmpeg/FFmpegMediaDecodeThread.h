@@ -61,7 +61,7 @@ class FFmpegMediaDecodeThread : public juce::Thread
 {
 public:
     FFmpegMediaDecodeThread ();
-    FFmpegMediaDecodeThread (AudioBufferFIFO<float>& fifo, const int videoFifoSize);
+    FFmpegMediaDecodeThread (AudioBufferFIFO<float>& fifo, const int mediaFifoSize);
     virtual ~FFmpegMediaDecodeThread ();
     
     void run() override;
@@ -194,7 +194,6 @@ private:
     int skippedAudioFramesCounter = 0;
 
     bool _firstDataHasArrived = false;
-
     bool _isBufferFilledEnough = false;
 
     /*! counts succesive audio  frames */
@@ -219,7 +218,7 @@ private:
     FFmpegVideoFramesFIFO videoFramesFifo;
 
 protected:
-    juce::File  videoFile;
+    juce::File  mediaFile;
 
     /** Gives access to the audio sources fifo to fill it */
     AudioBufferFIFO<float>& audioFifo;
@@ -243,7 +242,7 @@ protected:
     juce::ListenerList<FFmpegVideoListener> videoListeners;
     
     /*! states if a video files is currently open. */
-    bool _isVideoOpen = false;
+    bool _isMediaOpen = false;
     
     /*! states if end of file was reached.*/
     std::atomic<bool> endOfFileReached;// = false;
