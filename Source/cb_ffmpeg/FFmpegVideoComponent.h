@@ -55,7 +55,7 @@ SOFTWARE
 
 #include <JuceHeader.h>
 
-#include "FFmpegVideoReader.h"
+#include "FFmpegMediaReader.h"
 #include "FFmpegVideoListener.h"
 #include "FFmpegVideoScaler.h"
 
@@ -73,7 +73,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     
-    FFmpegVideoReader* getVideoReader() const;
+    FFmpegMediaReader* getVideoReader() const;
     
     
     //***** juce::AudioAppComponent overrides *****
@@ -136,7 +136,7 @@ private:
     std::unique_ptr<juce::AudioTransportSource> transportSource;
     
     /*! This is the video reader that decodes the video stream using FFmpeg. */
-    std::unique_ptr<FFmpegVideoReader> videoReader;
+    std::unique_ptr<FFmpegMediaReader> videoReader;
     
     /*! the current frame read from stream*/
     const AVFrame* currentAVFrame;

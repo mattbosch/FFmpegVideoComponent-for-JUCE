@@ -43,7 +43,7 @@ SOFTWARE
 
 #include "AudioBufferFIFO.h"
 #include "FFmpegVideoListener.h"
-#include "FFmpegVideoDecodeThread.h"
+#include "FFmpegMediaDecodeThread.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -54,16 +54,16 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 }
 
-class FFmpegVideoReader
+class FFmpegMediaReader
     : public juce::PositionableAudioSource
-    , public FFmpegVideoDecodeThread
+    , public FFmpegMediaDecodeThread
 {
 public:
-    FFmpegVideoReader (const int audioFifoSize=192000, const int videoFifoSize=102);
-    ~FFmpegVideoReader();
+    FFmpegMediaReader (const int audioFifoSize=192000, const int videoFifoSize=102);
+    ~FFmpegMediaReader();
     
     /*! load a file */
-    int loadVideoFile (const juce::File& inputFile);
+    int loadMediaFile (const juce::File& inputFile);
     
     /*! returns current presentation timecode according to audio stream */
     double getPositionSeconds() const;
@@ -100,6 +100,6 @@ private:
     
     juce::int64 nextReadPos;
 
-    juce::WeakReference<FFmpegVideoReader>::Master masterReference;
-    friend class juce::WeakReference<FFmpegVideoReader>;
+    juce::WeakReference<FFmpegMediaReader>::Master masterReference;
+    friend class juce::WeakReference<FFmpegMediaReader>;
 };

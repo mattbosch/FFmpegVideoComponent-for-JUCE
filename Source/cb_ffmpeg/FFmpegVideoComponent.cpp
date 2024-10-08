@@ -8,7 +8,7 @@
 //==============================================================================
 FFmpegVideoComponent::FFmpegVideoComponent()
     : transportSource(new juce::AudioTransportSource)
-, videoReader(new FFmpegVideoReader (AUDIO_BUFFER_SIZE, VIDEO_FRAME_BUFFER_SIZE))
+, videoReader(new FFmpegMediaReader (AUDIO_BUFFER_SIZE, VIDEO_FRAME_BUFFER_SIZE))
     , currentAVFrame(nullptr)
     , playSpeed(1.0)
 {
@@ -60,7 +60,7 @@ void FFmpegVideoComponent::paint (juce::Graphics& g)
     {
         g.drawFittedText ("FFMpegVideoComponent: Video Reader not initialized.", getLocalBounds(), juce::Justification::centred, 1);
     }
-    else if ( !videoReader->isVideoOpen() )
+    else if ( !videoReader->isMediaOpen() )
     {
         g.drawFittedText ("FFMpegVideoComponent: No Video loaded", getLocalBounds(), juce::Justification::centred, 1);
     }
@@ -105,7 +105,7 @@ void FFmpegVideoComponent::resized()
     }
 }
 
-FFmpegVideoReader* FFmpegVideoComponent::getVideoReader() const
+FFmpegMediaReader* FFmpegVideoComponent::getVideoReader() const
 {
     return videoReader.get();
 }
@@ -173,7 +173,7 @@ void FFmpegVideoComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo
 juce::Result FFmpegVideoComponent::load(const juce::File &file)
 {
     transportSource->stop();
-    if ( videoReader->loadVideoFile (file) )
+    if ( videoReader->loadMediaFile (file) )
     {
         return juce::Result::ok();
     }
@@ -187,7 +187,7 @@ void FFmpegVideoComponent::closeVideo()
 {
     if ( videoReader )
     {
-        videoReader->closeVideoFile();
+        videoReader->closeMediaFile();
         currentAVFrame = nullptr;
         currentFrameAsImage = juce::Image();
     }
@@ -195,7 +195,7 @@ void FFmpegVideoComponent::closeVideo()
 
 bool FFmpegVideoComponent::isVideoOpen() const
 {
-    return videoReader->isVideoOpen();
+    return videoReader->isMediaOpen();
 }
 
 double FFmpegVideoComponent::getVideoDuration() const

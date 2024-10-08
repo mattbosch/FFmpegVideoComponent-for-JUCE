@@ -57,26 +57,26 @@ extern "C"
 #include <libavcodec/avcodec.h>
 }
 
-class FFmpegVideoDecodeThread : public juce::Thread
+class FFmpegMediaDecodeThread : public juce::Thread
 {
 public:
-    FFmpegVideoDecodeThread ();
-    FFmpegVideoDecodeThread (AudioBufferFIFO<float>& fifo, const int videoFifoSize);
-    virtual ~FFmpegVideoDecodeThread ();
+    FFmpegMediaDecodeThread ();
+    FFmpegMediaDecodeThread (AudioBufferFIFO<float>& fifo, const int videoFifoSize);
+    virtual ~FFmpegMediaDecodeThread ();
     
     void run() override;
 
-    /*! opens a video file  */
-    int loadVideoFile (const juce::File& inputFile);
+    /*! opens a media file  */
+    int loadMediaFile (const juce::File& inputFile);
     
-    /*! closes the current video file */
-    void closeVideoFile ();
+    /*! closes the current media file */
+    void closeMediaFile ();
     
-    /*! returns the current video file*/
-    juce::File getVideoFile () const;
+    /*! returns the current media file*/
+    juce::File getMediaFile () const;
     
-    /*! returns true if a video is currently open */
-    bool isVideoOpen() const ;
+    /*! returns true if a media is currently open */
+    bool isMediaOpen() const ;
     
     /*! registers a listener  */
     void addVideoListener (FFmpegVideoListener* listener);
@@ -124,9 +124,12 @@ public:
     
     AVRational getVideoTimeBase() const;
     
+    int getVideoStreamIndex() const { return videoStreamIndex; }
+    
+    int getAudioStreamIndex() const { return audioStreamIndex; }
+    
     /*! Returns the number of audio channels. */
     int getNumberOfAudioChannels () const;
-    
 
     
 private:
@@ -183,17 +186,17 @@ private:
     
     /*! states if this thread is paused */
     std::atomic<bool> decodingIsPaused;
-    
+
     /*! counts the frames that were skipped while finding the wanted frame after seeking */
     int skippedVideoFramesCounter = 0;
-    
+
     /*! counts the frames that were skipped while finding the wanted frame after seeking */
     int skippedAudioFramesCounter = 0;
-    
+
     bool _firstDataHasArrived = false;
-    
+
     bool _isBufferFilledEnough = false;
-    
+
     /*! counts succesive audio  frames */
     int countAudioFrames;
     

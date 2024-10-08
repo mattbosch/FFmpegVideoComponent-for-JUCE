@@ -1,14 +1,11 @@
-#include "FFmpegVideoDecodeThread.h"
-
+#include "FFmpegMediaDecodeThread.h"
 #include "FFmpegHelpers.h"
-
 
 //you can find AV_TIME_BASE (1000000) in avutil.h, this is the inverse
 #define CB_AV_TIME_BASE_INVERSE    0.000001
 
-
-FFmpegVideoDecodeThread::FFmpegVideoDecodeThread (AudioBufferFIFO<float>& fifo, const int videoFifoSize)
-: juce::Thread("VideoDecodeThread"),
+FFmpegMediaDecodeThread::FFmpegMediaDecodeThread (AudioBufferFIFO<float>& fifo, const int videoFifoSize)
+: juce::Thread("MediaDecodeThread"),
 formatContext (nullptr),
 videoContext (nullptr),
 audioContext (nullptr),
@@ -29,14 +26,14 @@ currentPositionSeconds (0.0)
     waitUntilBuffersAreFullEnough.reset();
 }
 
-FFmpegVideoDecodeThread::~FFmpegVideoDecodeThread ()
+FFmpegMediaDecodeThread::~FFmpegMediaDecodeThread ()
 {
     av_frame_free (&audioFrame);
     //force to stop thread, if necessary
     stopThread (1000);
 }
 
-int FFmpegVideoDecodeThread::openCodecContext (AVCodecContext** codecContext,
+int FFmpegMediaDecodeThread::openCodecContext (AVCodecContext** codecContext,
                       enum AVMediaType mediaType,
                       bool refCounted)
 {
@@ -89,11 +86,11 @@ int FFmpegVideoDecodeThread::openCodecContext (AVCodecContext** codecContext,
     }
 }
 
-int FFmpegVideoDecodeThread::loadVideoFile(const juce::File &inputFile)
+int FFmpegMediaDecodeThread::loadMediaFile(const juce::File &inputFile)
 {
     //if there is already a context open, close it
     if (formatContext) {
-        closeVideoFile ();
+        closeMediaFile ();
         videoFile = juce::File();
     }
 
@@ -180,7 +177,7 @@ int FFmpegVideoDecodeThread::loadVideoFile(const juce::File &inputFile)
     return true;
 }
 
-void FFmpegVideoDecodeThread::closeVideoFile()
+void FFmpegMediaDecodeThread::closeMediaFile()
 {
     waitUntilBuffersAreFullEnough.signal();
     signalThreadShouldExit();
@@ -205,14 +202,13 @@ void FFmpegVideoDecodeThread::closeVideoFile()
     audioFifo.reset();
 }
 
-juce::File FFmpegVideoDecodeThread::getVideoFile () const
+juce::File FFmpegMediaDecodeThread::getMediaFile () const
 {
     return videoFile;
 }
 
-void FFmpegVideoDecodeThread::run()
+void FFmpegMediaDecodeThread::run()
 {
-//    DBG("run...");
     unsigned long newFramesCount = 0;   //frames in buffer ready to read
     bool bufferingStopped = false;      //keeps track if buffers are full, for debug use only
 
@@ -250,7 +246,8 @@ void FFmpegVideoDecodeThread::run()
             {
                 //since frames come in groups of successive audio frames OR video frames, we need to buffer at least one
                 //whole group of each frame type before we can display images and play sound.
-                if (countVideoFrameGroups >= 4 && countAudioFrameGroups >= 4) 
+                if ((videoStreamIndex >= 0 && countVideoFrameGroups >= 4) ||
+                    (audioStreamIndex >= 0 && countAudioFrameGroups >= 4))
                 {
                     if (!_firstDataHasArrived)
                     {
@@ -313,7 +310,7 @@ void FFmpegVideoDecodeThread::run()
 //    DBG("VideoDecodeThread has stopped...");
 }
 
-int FFmpegVideoDecodeThread::readAndDecodePacket()
+int FFmpegMediaDecodeThread::readAndDecodePacket()
 {
     //allocate packet, initialise it
     AVPacket* packet = av_packet_alloc();
@@ -351,25 +348,25 @@ int FFmpegVideoDecodeThread::readAndDecodePacket()
         return 0;
     }
     
-    if (packet->stream_index == audioStreamIndex)
-        decodeAudioPacket (packet);
-    else if(packet->stream_index == videoStreamIndex)
-        decodeVideoPacket (packet);
+    if (packet->stream_index == audioStreamIndex && audioStreamIndex >= 0)
+        decodeAudioPacket(packet);
+    else if (packet->stream_index == videoStreamIndex && videoStreamIndex >= 0)
+        decodeVideoPacket(packet);
     //discard subtitles
-//    else
-//        DBG ("Packet is neither audio nor video... stream: " + juce::String (packet->stream_index));
+    else
+        DBG ("Packet is neither audio nor video... stream: " + juce::String (packet->stream_index));
     
     av_packet_unref (packet);
     return 1; //return SUCCESS
 }
 
-int FFmpegVideoDecodeThread::decodeAudioPacket (AVPacket* packet)
+int FFmpegMediaDecodeThread::decodeAudioPacket (AVPacket* packet)
 {
     //count groups of video frames
     if (countVideoFrames > 0 )
     {
         countVideoFrameGroups++;
-//        DBG("Video Frames: " + juce::String(countVideoFrames) + ", Video Groups: " + juce::String(countVideoFrameGroups));
+        //DBG("Video Frames: " + juce::String(countVideoFrames) + ", Video Groups: " + juce::String(countVideoFrameGroups));
         countVideoFrames = 0;
     }
     
@@ -437,7 +434,7 @@ int FFmpegVideoDecodeThread::decodeAudioPacket (AVPacket* packet)
     return numOutputSamples;
 }
 
-int FFmpegVideoDecodeThread::decodeVideoPacket (AVPacket* packet)
+int FFmpegMediaDecodeThread::decodeVideoPacket (AVPacket* packet)
 {
     //count groups of audio frames
     if ( countAudioFrames > 0)
@@ -508,7 +505,7 @@ int FFmpegVideoDecodeThread::decodeVideoPacket (AVPacket* packet)
     return response;
 }
 
-void FFmpegVideoDecodeThread::pauseDecoding()
+void FFmpegMediaDecodeThread::pauseDecoding()
 {
     if (/*!decodingShouldPause &&*/ isThreadRunning())
     {
@@ -523,7 +520,7 @@ void FFmpegVideoDecodeThread::pauseDecoding()
     }
 }
 
-void FFmpegVideoDecodeThread::continueDecoding()
+void FFmpegMediaDecodeThread::continueDecoding()
 {
     if (decodingIsPaused && isThreadRunning())
     {
@@ -535,13 +532,31 @@ void FFmpegVideoDecodeThread::continueDecoding()
 }
 
 
-void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSeconds, bool seek)
+void FFmpegMediaDecodeThread::setPositionSeconds (const double newPositionSeconds, bool seek)
 {
     //update position
     currentPositionSeconds = newPositionSeconds;
-    // Position[Samples] = position[Seconds] * Sample Rate
-    int64_t readPosSamples = static_cast<int64_t>(currentPositionSeconds *
-        static_cast<double>(formatContext->streams[audioStreamIndex]->time_base.den));
+    
+    int64_t readPosSamples = 0; // Position[Samples] = position[Seconds] * Sample Rate
+    int seekStreamIndex = -1;
+
+    // Calculate based on existing audio stream otherwise use video stream
+    if (audioStreamIndex >= 0)
+    {
+        seekStreamIndex = audioStreamIndex;
+        readPosSamples = static_cast<int64_t>(currentPositionSeconds * static_cast<double>(formatContext->streams[audioStreamIndex]->time_base.den));
+    }
+    else if (videoStreamIndex >= 0)
+    {
+        seekStreamIndex = videoStreamIndex;
+        readPosSamples = static_cast<int64_t>(currentPositionSeconds * static_cast<double>(formatContext->streams[videoStreamIndex]->time_base.den));
+    }
+    else
+    {
+        // Handle the case where neither stream is available
+        DBG("No audio or video stream detected!");
+        return;
+    }
     
     //if a transport source is using the video reader to seek
     if (seek)
@@ -574,11 +589,15 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
         _isBufferFilledEnough = false; //debug stuff
         
         //flush context buffers
-        avcodec_flush_buffers(videoContext);
-        avcodec_flush_buffers(audioContext);
-
+        if (getVideoContext() != nullptr) {
+            avcodec_flush_buffers(videoContext);
+        }
+        if (getAudioContext() != nullptr) {
+            avcodec_flush_buffers(audioContext);
+        }
+        
         //go to position
-        int result = av_seek_frame (formatContext, audioStreamIndex, readPosSamples, AVSEEK_FLAG_BACKWARD);
+        int result = av_seek_frame (formatContext, seekStreamIndex, readPosSamples, AVSEEK_FLAG_BACKWARD);
         if (result < 0)
             DBG("Seek error: " + juce::String(result));
 
@@ -654,12 +673,12 @@ void FFmpegVideoDecodeThread::setPositionSeconds (const double newPositionSecond
 //    }
 }
 
-double FFmpegVideoDecodeThread::getCurrentPositionSeconds () const
+double FFmpegMediaDecodeThread::getCurrentPositionSeconds () const
 {
     return currentPositionSeconds;
 }
 
-int FFmpegVideoDecodeThread::getVideoWidth () const
+int FFmpegMediaDecodeThread::getVideoWidth () const
 {
     if (videoContext) {
         return videoContext->width;
@@ -667,7 +686,7 @@ int FFmpegVideoDecodeThread::getVideoWidth () const
     return 0;
 }
 
-int FFmpegVideoDecodeThread::getVideoHeight () const
+int FFmpegMediaDecodeThread::getVideoHeight () const
 {
     if (videoContext) {
         return videoContext->height;
@@ -675,34 +694,34 @@ int FFmpegVideoDecodeThread::getVideoHeight () const
     return 0;
 }
 
-enum AVPixelFormat FFmpegVideoDecodeThread::getPixelFormat () const
+enum AVPixelFormat FFmpegMediaDecodeThread::getPixelFormat () const
 {
     if (videoContext)
         return videoContext->pix_fmt;
     return AV_PIX_FMT_NONE;
 }
 
-enum AVSampleFormat FFmpegVideoDecodeThread::getSampleFormat () const
+enum AVSampleFormat FFmpegMediaDecodeThread::getSampleFormat () const
 {
     if (audioContext)
         return audioContext->sample_fmt;
     return AV_SAMPLE_FMT_NONE;
 }
 
-double FFmpegVideoDecodeThread::getVideoAspectRatio () const
+double FFmpegMediaDecodeThread::getVideoAspectRatio () const
 {
     return static_cast<double> (getVideoWidth()) /
         static_cast<double> (getVideoHeight());
 }
 
-double FFmpegVideoDecodeThread::getPixelAspectRatio () const
+double FFmpegMediaDecodeThread::getPixelAspectRatio () const
 {
     if (videoContext && videoContext->sample_aspect_ratio.num > 0)
         return av_q2d (videoContext->sample_aspect_ratio);
     return 1.0;
 }
 
-double FFmpegVideoDecodeThread::getFramesPerSecond () const
+double FFmpegMediaDecodeThread::getFramesPerSecond () const
 {
     //if frame rate is set in video context
     if (videoContext && videoContext->framerate.num > 0)
@@ -723,7 +742,7 @@ double FFmpegVideoDecodeThread::getFramesPerSecond () const
     return 0;
 }
 
-double FFmpegVideoDecodeThread::getSampleRate () const
+double FFmpegMediaDecodeThread::getSampleRate () const
 {
     if (audioContext) {
         return audioContext->sample_rate;
@@ -731,7 +750,7 @@ double FFmpegVideoDecodeThread::getSampleRate () const
     return 0;
 }
 
-AVRational FFmpegVideoDecodeThread::getAudioTimeBase() const
+AVRational FFmpegMediaDecodeThread::getAudioTimeBase() const
 {
     if (formatContext)
     {
@@ -743,7 +762,7 @@ AVRational FFmpegVideoDecodeThread::getAudioTimeBase() const
     return av_make_q (0, 1);
 }
 
-AVRational FFmpegVideoDecodeThread::getVideoTimeBase() const
+AVRational FFmpegMediaDecodeThread::getVideoTimeBase() const
 {
         if (formatContext)
         {
@@ -755,7 +774,7 @@ AVRational FFmpegVideoDecodeThread::getVideoTimeBase() const
         return av_make_q (0, 1);
 }
 
-double FFmpegVideoDecodeThread::getDuration () const
+double FFmpegMediaDecodeThread::getDuration () const
 {
     if (formatContext)
     {
@@ -765,7 +784,7 @@ double FFmpegVideoDecodeThread::getDuration () const
     return 0;
 }
 
-int FFmpegVideoDecodeThread::getNumberOfAudioChannels () const
+int FFmpegMediaDecodeThread::getNumberOfAudioChannels () const
 {
     if (audioContext) {
         return audioContext->ch_layout.nb_channels;
@@ -773,27 +792,27 @@ int FFmpegVideoDecodeThread::getNumberOfAudioChannels () const
     return 0;
 }
 
-AVCodecContext* FFmpegVideoDecodeThread::getVideoContext () const
+AVCodecContext* FFmpegMediaDecodeThread::getVideoContext () const
 {
     return videoContext;
 }
 
-AVCodecContext* FFmpegVideoDecodeThread::getAudioContext () const
+AVCodecContext* FFmpegMediaDecodeThread::getAudioContext () const
 {
     return audioContext;
 }
 
-bool FFmpegVideoDecodeThread::isVideoOpen() const
+bool FFmpegMediaDecodeThread::isMediaOpen() const
 {
     return _isVideoOpen;
 }
 
-void FFmpegVideoDecodeThread::addVideoListener (FFmpegVideoListener* listener)
+void FFmpegMediaDecodeThread::addVideoListener (FFmpegVideoListener* listener)
 {
     videoListeners.add (listener);
 }
 
-void FFmpegVideoDecodeThread::removeVideoListener (FFmpegVideoListener* listener)
+void FFmpegMediaDecodeThread::removeVideoListener (FFmpegVideoListener* listener)
 {
     videoListeners.remove (listener);
 }
