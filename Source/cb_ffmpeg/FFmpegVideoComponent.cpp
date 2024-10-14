@@ -15,7 +15,7 @@ FFmpegVideoComponent::FFmpegVideoComponent()
     frameWasPainted = false;
     
     setOpaque (true);
-    startTimerHz(80);
+    startTimerHz(defaultFramerate);
     
     if (videoReader)
         videoReader->addVideoListener(this);
@@ -175,6 +175,14 @@ juce::Result FFmpegVideoComponent::load(const juce::File &file)
     transportSource->stop();
     if ( videoReader->loadMediaFile (file) )
     {
+        stopTimer();
+        double frameRate = videoReader->getFramesPerSecond();
+
+        if (frameRate > 0.0)
+            startTimerHz(static_cast<int>(frameRate));
+        else
+            startTimerHz(defaultFramerate);
+    
         return juce::Result::ok();
     }
     else

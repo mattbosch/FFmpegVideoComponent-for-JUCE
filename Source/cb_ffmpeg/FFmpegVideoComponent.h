@@ -156,6 +156,8 @@ private:
     double playSpeed = 1.0;
     
     bool isPaused = false;
+    
+    int defaultFramerate = 30;
         
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FFmpegVideoComponent)
 };

@@ -19,6 +19,8 @@ currentPositionSeconds (0.0)
     audioFrame = av_frame_alloc();
     _isMediaOpen = false;
     endOfFileReached = false;
+    decodingShouldPause = false;
+    decodingIsPaused = false;
     
     waitForDecodingToPause.reset();
     waitUntilContinue.reset();
