@@ -38,6 +38,8 @@ SOFTWARE
 template<typename FloatType>
 class AudioBufferFIFO  : public juce::AbstractFifo
 {
+    double seconds = 0;
+
 public:
     /*! Creates a FIFO with a buffer of given number of channels and given number of samples */
     AudioBufferFIFO (int channels, int buffersize) :
@@ -49,9 +51,18 @@ public:
     /*! Resize the buffer with new number of channels and new number of samples */
     void setSize (const int channels, const int newBufferSize)
     {
+        seconds = 0;
         buffer.setSize (channels, newBufferSize);
         setTotalSize (newBufferSize);
         reset ();
+    }
+
+    void setSecondsAtWritePosition(double sec) {
+        seconds = sec;
+    }
+
+    double getSecondsAtWritePosition() {
+        return seconds;
     }
 
     /*! Push samples into the FIFO from raw float arrays */
@@ -76,15 +87,18 @@ public:
         const int addSamples = (numSamples < 0 ? samples.getNumSamples() : numSamples) - sourceOffset;
         jassert (getFreeSpace() >= addSamples);
         
+        int channels = (std::min)(samples.getNumChannels(), buffer.getNumChannels());
+
         int start1, size1, start2, size2;
         prepareToWrite (addSamples, start1, size1, start2, size2);
         if (size1 > 0)
-            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            for (int channel = 0; channel < channels; ++channel)
                 buffer.copyFrom (channel, start1, samples.getReadPointer (channel, sourceOffset), size1);
         if (size2 > 0)
-            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            for (int channel = 0; channel < channels; ++channel)
                 buffer.copyFrom (channel, start2, samples.getReadPointer (channel, sourceOffset + size1), size2);
         finishedWrite (size1 + size2);
+
     }
     
     /* Reads samples from this fifo into raw float arrays */
@@ -132,11 +146,14 @@ public:
 
         int start1, size1, start2, size2;
         prepareToRead (readSamples, start1, size1, start2, size2);
+
+        int channels = (std::min)(info.buffer->getNumChannels(), buffer.getNumChannels());
+
         if (size1 > 0)
-            for (int channel = 0; channel < info.buffer->getNumChannels(); ++channel)
+            for (int channel = 0; channel < channels; ++channel)
                     info.buffer->copyFrom (channel, info.startSample, buffer.getReadPointer (channel, start1), size1);
         if (size2 > 0)
-            for (int channel = 0; channel < info.buffer->getNumChannels(); ++channel)
+            for (int channel = 0; channel < channels; ++channel)
                 info.buffer->copyFrom (channel, info.startSample + size1, buffer.getReadPointer (channel, start2), size2);
         finishedRead (size1 + size2);
     }
@@ -151,6 +168,9 @@ public:
         buffer.clear ();
         reset();
     }
+
+
+     
 
 private:
     /*! The actual audio buffer */

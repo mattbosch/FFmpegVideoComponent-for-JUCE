@@ -105,11 +105,11 @@ public:
         return videoFramesFifo[writeIndex].second;
     }
     
-    double getSecondsAtWriteIndex()
+    double getSecondsAtWriteIndex(int offset = 0)
     {
-        return videoFramesFifo[writeIndex].first;
+        return videoFramesFifo[(writeIndex + offset) % size].first;
     }
-    
+
     unsigned int advanceReadIndex()
     {
         readIndex = (++readIndex)%size;
@@ -131,9 +131,12 @@ public:
         }
     }
     
-    unsigned countNewFrames()
+    unsigned int countNewFrames()
     {
-        return (size + writeIndex - readIndex) % size;
+        if (writeIndex >= readIndex)
+            return writeIndex - readIndex;
+        else
+            return size - (readIndex - writeIndex);
     }
     
     void setSecondsAtWriteIndex(double new_seconds)
@@ -150,8 +153,24 @@ public:
             offset++;
         return offset;
     }
-    
-    
+
+    unsigned int checkExistingFrameForSeconds(double seconds)
+    {
+        //Try to find the position of the current video frame in FIFO, starting at read position. The current frame might
+        //not be the next frame in fifo. Frames before the current frame must be dropped.
+        unsigned int offset = findOffsetForSeconds(seconds);
+        return (offset != 0 && videoFramesFifo[(readIndex + offset) % size].first > seconds);
+    }
+
+    AVFrame* getFrameAtReadIndexForSeconds(double targetSeconds)
+    {
+        unsigned int offset = findOffsetForSeconds(targetSeconds);
+        if (offset != 0) {
+            return videoFramesFifo[(readIndex + offset) % size].second;
+        }
+        return videoFramesFifo[readIndex].second;
+    }
+
     
 private:
     /*! vector with pairs of position (in seconds) and corresponding frames. */

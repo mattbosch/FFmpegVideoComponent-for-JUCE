@@ -64,6 +64,8 @@ public:
     FFmpegMediaDecodeThread (AudioBufferFIFO<float>& fifo, const int mediaFifoSize);
     virtual ~FFmpegMediaDecodeThread ();
     
+    void enableVideoOnly(bool enable);
+
     void run() override;
 
     /*! opens a media file  */
@@ -118,7 +120,7 @@ public:
     double getPixelAspectRatio () const;
 
     /*! returns the sample rate */
-    double getSampleRate () const;
+    virtual double getSampleRate () const;
 
     AVRational getAudioTimeBase() const;
     
@@ -129,7 +131,25 @@ public:
     int getAudioStreamIndex() const { return audioStreamIndex; }
     
     /*! Returns the number of audio channels. */
-    int getNumberOfAudioChannels () const;
+    virtual int getNumberOfAudioChannels () const;
+
+    /*! This method interrupts the decoding thread, and waits until the current decoding cycle is finished*/
+    void pauseDecoding();
+    
+    /*! This method lets the decoding continue, if it was paused before */
+    void continueDecoding();
+
+	bool isEndOfFile() const { return endOfFileReached; }
+
+protected:
+    /*! returns pointer to the format context. */
+    AVFormatContext* getFormatContext() const;
+
+    /*! returns pointer to the video codec context. */
+    AVCodecContext* getVideoContext() const;
+
+    /*! returns pointer to the audio codec context. */
+    AVCodecContext* getAudioContext() const;
 
     
 private:
@@ -144,15 +164,7 @@ private:
                           enum AVMediaType mediaType,
                           bool refCounted);
     
-    /*! returns pointer to the format context. */
-    AVFormatContext* getFormatContext() const;
-    
-    /*! returns pointer to the video codec context. */
-    AVCodecContext* getVideoContext () const;
-    
-    /*! returns pointer to the audio codec context. */
-    AVCodecContext* getAudioContext () const;
-    
+  
     /*! reads and decodes av packets*/
     int readAndDecodePacket();
     
@@ -164,12 +176,6 @@ private:
         wrong. */
     int decodeVideoPacket (AVPacket* packet);
     
-    /*! This method interrupts the decoding thread, and waits until the current decoding cycle is finished*/
-    void pauseDecoding();
-    
-    /*! This method lets the decoding continue, if it was paused before */
-    void continueDecoding();
-    
     /* Contexts */
     AVFormatContext* formatContext;
     AVCodecContext* videoContext;
@@ -180,7 +186,13 @@ private:
     int videoStreamIndex;
     /*! index of the audio stream */
     int audioStreamIndex;
-    
+ 
+    bool videoOnlyMode = false;
+
+    // Buffer size constants
+    const int targetFrameCount = 2;
+    const int targetAudioBufferSize = 1024;
+
     /*! states if this thread should be paused after the current decoding cycle*/
     std::atomic<bool> decodingShouldPause;
     
@@ -214,15 +226,15 @@ private:
     /*! audio buffer used for conversion */
     juce::AudioBuffer<float> audioConvertBuffer;
     
-    /*! video frames fifo to buffer the decoded frames*/
-    FFmpegVideoFramesFIFO videoFramesFifo;
-
 protected:
     juce::File  mediaFile;
 
     /** Gives access to the audio sources fifo to fill it */
     AudioBufferFIFO<float>& audioFifo;
-    
+
+    /*! video frames fifo to buffer the decoded frames*/
+    FFmpegVideoFramesFIFO videoFramesFifo;
+
     /*! Event that is used to wait until the decoding thread has paused after being told to pause. */
     juce::WaitableEvent waitForDecodingToPause;
     
