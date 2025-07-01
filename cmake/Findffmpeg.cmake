@@ -25,7 +25,7 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Windows" AND ${CMAKE_SYSTEM_PROCESSOR} ST
     
     # TODO: Use the FFMPEGBUILD concept for mac here too
 
-    set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1-latest-win64-gpl-shared-5.1.zip")
+    set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1.6-16-g6e63e49496-win64-gpl-5.1.zip")
 
     if(NOT BUILT_ffmpeg_RELEASE)
         message(FATAL_ERROR "Platform ${CMAKE_SYSTEM_PROCESSOR} on system ${CMAKE_SYSTEM_NAME} is not supported!")
@@ -46,9 +46,9 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     # TODO: Use the FFMPEGBUILD concept for mac here too
     
     if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "amd64")
-        set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1-latest-linux64-gpl-5.1.tar.xz")
+        set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1.6-16-g6e63e49496-linux64-gpl-5.1.tar.xz")
     elseif(${CMAKE_SYSTEM_PROCESSOR} STREQUAL aarch64)
-        set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1-latest-linuxarm64-gpl-5.1.tar.xz")
+        set(BUILT_ffmpeg_RELEASE "ffmpeg-n5.1.6-16-g6e63e49496-linuxarm64-gpl-5.1.tar.xz")
     endif()
 
     if(NOT BUILT_ffmpeg_RELEASE)
