@@ -37,7 +37,7 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Windows" AND ${CMAKE_SYSTEM_PROCESSOR} ST
     message(STATUS "ffmpeg download path: ${PROJECT_BINARY_DIR}/_deps/ffmpeg-build")
 
     FetchContent_Declare(ffmpeg
-        URL  "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/${BUILT_ffmpeg_RELEASE}"
+        URL  "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2025-01-31-12-58/${BUILT_ffmpeg_RELEASE}"
         SOURCE_DIR "${PROJECT_BINARY_DIR}/_deps/ffmpeg-build"  
     )
 
@@ -60,7 +60,7 @@ elseif (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     endif()
 
     FetchContent_Declare(ffmpeg
-        URL  "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/${BUILT_ffmpeg_RELEASE}"
+        URL  "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2025-01-31-12-58/${BUILT_ffmpeg_RELEASE}"
         SOURCE_DIR "${PROJECT_BINARY_DIR}/_deps/ffmpeg-build"  
     )
 
