@@ -30,12 +30,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-#include "Source/cb_ffmpeg/AudioBufferFIFO.h"
-#include "Source/cb_ffmpeg/FFmpegHelpers.h"
-#include "Source/cb_ffmpeg/FFmpegVideoComponent.h"
-#include "Source/cb_ffmpeg/FFmpegMediaDecodeThread.h"
-#include "Source/cb_ffmpeg/FFmpegVideoFramesFIFO.h"
-#include "Source/cb_ffmpeg/FFmpegVideoListener.h"
-#include "Source/cb_ffmpeg/FFmpegMediaReader.h"
-#include "Source/cb_ffmpeg/FFmpegVideoScaler.h"
 #include "Source/cb_strings/StringHelper.h"
+
+// CB FFmpeg Universal Media Reader System
+#include "Source/cb_ffmpeg/cb_ffmpeg.h"
