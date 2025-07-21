@@ -30,6 +30,7 @@ public:
     bool loadMediaFile(const juce::File& file);
     void togglePlayPause();
     void stopPlayback();
+    void seek(double timeInSeconds);
     
     double getCurrentTime() const;
     double getDuration() const;
@@ -50,6 +51,8 @@ private:
     void onPlaybackStarted() override;
     void onPlaybackStopped() override;
     void onPlaybackPaused() override;
+    void onSeekStarted(double targetTime) override;
+    void onSeekCompleted(double actualTime) override;
     void onEndOfMedia() override;
     void onError(const juce::String& errorMessage) override;
 

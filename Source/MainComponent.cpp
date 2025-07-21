@@ -137,10 +137,9 @@ void MainComponent::sliderDragEnded(juce::Slider* slider)
     {
         if (playerComponent.isMediaLoaded() && playerComponent.getDuration() > 0)
         {
-            double newPosition = (positionSlider_.getValue() / 100.0) * playerComponent.getDuration();
-            // TODO: Implement seeking in MediaReader
-            // playerComponent.seek(newPosition);
-            juce::Logger::writeToLog("Seek requested to: " + juce::String(newPosition) + "s (not yet implemented in MediaReader)");
+            double newPosition = positionSlider_.getValue(); // Slider value is already in seconds
+            playerComponent.seek(newPosition);
+            juce::Logger::writeToLog("Seek requested to: " + juce::String(newPosition) + "s");
         }
         isDraggingPosition_ = false;
     }
@@ -240,7 +239,7 @@ void MainComponent::setupUI()
     
     transportGroup_.addAndMakeVisible(positionSlider_);
     positionSlider_.addListener(this);
-    positionSlider_.setRange(0, 100, 0);
+    positionSlider_.setRange(0, 1, 0.1); // Will be updated when media loads
     positionSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     positionSlider_.setEnabled(false);
 

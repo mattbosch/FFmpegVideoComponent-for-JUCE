@@ -161,16 +161,49 @@ void AudioDecoder::stop()
         decoderThread_.join();
     }
     
+    // Reset timestamp to 0 so we start from beginning when restarted
+    currentTimestamp_.store(0.0);
+    
     state_.store(DecoderState::Ready);
-    juce::Logger::writeToLog("AudioDecoder stopped");
+    juce::Logger::writeToLog("AudioDecoder stopped and reset to beginning");
 }
 
 void AudioDecoder::seek(double timeInSeconds, SeekMode mode)
 {
+    juce::Logger::writeToLog("AudioDecoder::seek() called - Target: " + juce::String(timeInSeconds) + " seconds");
+    
+    if (state_.load() != DecoderState::Decoding) {
+        juce::Logger::writeToLog("AudioDecoder: Cannot seek - decoder not running");
+        return;
+    }
+    
+    // Set seek parameters atomically
+    seekTarget_.store(timeInSeconds);
+    seekMode_.store(mode);
+    
+    // Signal the decoder thread to perform seek
+    shouldSeek_.store(true);
+    
+    juce::Logger::writeToLog("AudioDecoder: Seek request queued for " + juce::String(timeInSeconds) + " seconds");
 }
 
 void AudioDecoder::flush()
 {
+    juce::Logger::writeToLog("AudioDecoder::flush() called");
+    
+    // Clear the audio buffer
+    audioBuffer_.clear();
+    
+    // Flush codec buffers if available
+    if (codecContext_) {
+        avcodec_flush_buffers(codecContext_);
+        juce::Logger::writeToLog("AudioDecoder: Codec buffers flushed");
+    }
+    
+    // Reset timestamp
+    currentTimestamp_.store(0.0);
+    
+    juce::Logger::writeToLog("AudioDecoder: Flush completed");
 }
 
 void AudioDecoder::setPlaybackRate(double rate)
@@ -196,12 +229,39 @@ void AudioDecoder::decoderLoop()
     
     juce::Logger::writeToLog("AudioDecoder: Starting decoder loop");
     
+    // Check if we need to seek to current timestamp at start (e.g., after restart)
+    double startTime = currentTimestamp_.load();
+    if (startTime >= 0.0)
+    {
+        juce::Logger::writeToLog("AudioDecoder: Seeking to start position " + juce::String(startTime) + " seconds");
+        
+        // Convert time to stream timebase and seek
+        if (formatContext_ && audioStream_)
+        {
+            int64_t seekTarget = static_cast<int64_t>(startTime / av_q2d(audioStream_->time_base));
+            int ret = av_seek_frame(formatContext_, streamIndex_, seekTarget, AVSEEK_FLAG_ANY);
+            if (ret >= 0)
+            {
+                // Flush codec buffers after seek
+                if (codecContext_)
+                {
+                    avcodec_flush_buffers(codecContext_);
+                }
+                juce::Logger::writeToLog("AudioDecoder: Successfully seeked to start position");
+            }
+            else
+            {
+                juce::Logger::writeToLog("AudioDecoder: Failed to seek to start position");
+            }
+        }
+    }
+    
     while (!shouldStop_.load())
     {
         // Handle seeking
         if (shouldSeek_.load())
         {
-            // TODO: Implement seeking
+            performSeek();
             shouldSeek_.store(false);
         }
         
@@ -495,6 +555,55 @@ bool AudioDecoder::convertAndWriteFrame(AVFrame* frame)
 
 void AudioDecoder::performSeek()
 {
+    double targetTime = seekTarget_.load();
+    SeekMode mode = seekMode_.load();
+    
+    juce::Logger::writeToLog("AudioDecoder::performSeek() - Seeking to " + juce::String(targetTime) + " seconds");
+    
+    if (!formatContext_ || !audioStream_) {
+        juce::Logger::writeToLog("AudioDecoder: Cannot seek - invalid format context or stream");
+        return;
+    }
+    
+    // Convert time to stream timebase
+    int64_t seekTarget = static_cast<int64_t>(targetTime / av_q2d(audioStream_->time_base));
+    
+    // Determine seek flags based on mode
+    int seekFlags = 0;
+    switch (mode) {
+        case SeekMode::Fast:
+            seekFlags = 0; // Seek to any frame (keyframe seeking)
+            break;
+        case SeekMode::Accurate:
+            seekFlags = AVSEEK_FLAG_ANY; // Seek to any frame (more accurate)
+            break;
+        case SeekMode::Backward:
+            seekFlags = AVSEEK_FLAG_BACKWARD;
+            break;
+        case SeekMode::Forward:
+            seekFlags = 0;
+            break;
+    }
+    
+    // Perform the seek
+    int ret = av_seek_frame(formatContext_, streamIndex_, seekTarget, seekFlags);
+    if (ret < 0) {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        juce::Logger::writeToLog("AudioDecoder: Seek failed - " + juce::String(errbuf));
+        return;
+    }
+    
+    // Flush the codec to clear internal buffers
+    if (codecContext_) {
+        avcodec_flush_buffers(codecContext_);
+        juce::Logger::writeToLog("AudioDecoder: Codec buffers flushed");
+    }
+    
+    // Update current timestamp
+    currentTimestamp_.store(targetTime);
+    
+    juce::Logger::writeToLog("AudioDecoder: Seek completed successfully to " + juce::String(targetTime) + " seconds");
 }
 
 void AudioDecoder::handleEndOfStream()

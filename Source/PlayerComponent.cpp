@@ -166,6 +166,22 @@ void PlayerComponent::stopPlayback()
     }
 }
 
+void PlayerComponent::seek(double timeInSeconds)
+{
+    juce::Logger::writeToLog("PlayerComponent::seek() called - Target: " + juce::String(timeInSeconds) + " seconds");
+    
+    if (mediaReader_ && isMediaLoaded_)
+    {
+        mediaReader_->seek(timeInSeconds);
+        currentTime_ = timeInSeconds; // Update local cache immediately for UI responsiveness
+        juce::Logger::writeToLog("PlayerComponent: Seek request forwarded to MediaReader");
+    }
+    else
+    {
+        juce::Logger::writeToLog("PlayerComponent: Cannot seek - no media loaded or no MediaReader");
+    }
+}
+
 double PlayerComponent::getCurrentTime() const
 {
     return currentTime_;
@@ -319,9 +335,20 @@ void PlayerComponent::onPlaybackPaused()
 
 void PlayerComponent::onEndOfMedia()
 {
-    isPlaying_ = false;
-    currentTime_ = duration_;
-    // Could implement looping here
+    juce::Logger::writeToLog("PlayerComponent::onEndOfMedia() called");
+    currentTime_ = duration_; // Set to end
+}
+
+void PlayerComponent::onSeekStarted(double targetTime)
+{
+    juce::Logger::writeToLog("PlayerComponent::onSeekStarted() called - Target: " + juce::String(targetTime) + "s");
+    // Could show seeking indicator in UI if needed
+}
+
+void PlayerComponent::onSeekCompleted(double actualTime)
+{
+    juce::Logger::writeToLog("PlayerComponent::onSeekCompleted() called - Actual: " + juce::String(actualTime) + "s");
+    currentTime_ = actualTime; // Update position to actual seek result
 }
 
 void PlayerComponent::onError(const juce::String& errorMessage)

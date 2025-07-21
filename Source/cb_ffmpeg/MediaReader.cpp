@@ -218,6 +218,13 @@ void MediaReader::play()
     {
         juce::Logger::writeToLog("MediaReader: AudioDecoder exists, current state: " + juce::String(static_cast<int>(audioDecoder_->getState())));
         
+        // If we're starting from stopped state, seek to beginning first
+        if (getPlaybackState() == PlaybackState::Stopped)
+        {
+            juce::Logger::writeToLog("MediaReader: Starting from stopped state, seeking to beginning");
+            seek(0.0, SeekMode::Fast);
+        }
+        
         // If decoder is already running (started during loadFile), just set playback state
         if (audioDecoder_->getState() == DecoderState::Decoding)
         {
@@ -287,6 +294,12 @@ void MediaReader::stop()
     if (audioDecoder_)
     {
         audioDecoder_->stop();
+        
+        // Reset position to 0 for UI display
+        if (mediaAudioSource_) {
+            mediaAudioSource_->setCurrentPosition(0.0);
+        }
+        
         setPlaybackState(PlaybackState::Stopped);
         if (callback_) callback_->onPlaybackStopped();
         juce::Logger::writeToLog("Audio playback stopped");
@@ -295,6 +308,51 @@ void MediaReader::stop()
 
 void MediaReader::seek(double timeInSeconds, SeekMode mode)
 {
+    juce::Logger::writeToLog("MediaReader::seek() called - Target: " + juce::String(timeInSeconds) + " seconds");
+    
+    if (!isLoaded()) {
+        juce::Logger::writeToLog("MediaReader: Cannot seek - no media loaded");
+        return;
+    }
+    
+    // Clamp seek time to valid range
+    double clampedTime = juce::jlimit(0.0, mediaInfo_.duration, timeInSeconds);
+    if (clampedTime != timeInSeconds) {
+        juce::Logger::writeToLog("MediaReader: Seek time clamped from " + juce::String(timeInSeconds) + 
+                                " to " + juce::String(clampedTime) + " seconds");
+    }
+    
+    if (audioDecoder_) {
+        juce::Logger::writeToLog("MediaReader: Requesting AudioDecoder seek to " + juce::String(clampedTime) + " seconds");
+        
+        // Notify callback that seek started
+        if (callback_) {
+            callback_->onSeekStarted(clampedTime);
+        }
+        
+        // Clear audio buffer before seeking to prevent old audio from playing
+        if (audioBuffer_) {
+            audioBuffer_->clear();
+            juce::Logger::writeToLog("MediaReader: Audio buffer cleared for seek");
+        }
+        
+        // Request seek from audio decoder
+        audioDecoder_->seek(clampedTime, mode);
+        
+        // Update position in MediaAudioSource
+        if (mediaAudioSource_) {
+            mediaAudioSource_->setCurrentPosition(clampedTime);
+        }
+        
+        // Notify callback that seek completed
+        if (callback_) {
+            callback_->onSeekCompleted(clampedTime);
+        }
+        
+        juce::Logger::writeToLog("MediaReader: Seek request completed");
+    } else {
+        juce::Logger::writeToLog("MediaReader: No AudioDecoder available for seeking");
+    }
 }
 
 void MediaReader::setLooping(bool shouldLoop)
