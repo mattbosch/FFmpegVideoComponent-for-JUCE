@@ -34,25 +34,13 @@ void MediaAudioSource::prepareToPlay(int samplesPerBlockExpected, double sampleR
     if (audioStream) {
         outputChannels_ = std::min(audioStream->channels, 32);
         
-        // Check if we need resampling
-        needsResampling_ = (audioStream->sampleRate != static_cast<int>(sampleRate));
-        if (needsResampling_) {
-            resampleRatio_ = sampleRate / audioStream->sampleRate;
-            
-            juce::Logger::writeToLog("MediaAudioSource: Sample rate conversion needed - File: " + 
-                                    juce::String(audioStream->sampleRate) + " Hz, Output: " + 
-                                    juce::String(sampleRate) + " Hz, Ratio: " + 
-                                    juce::String(resampleRatio_, 4));
-            
-            // Reset interpolators
-            for (int i = 0; i < outputChannels_; ++i) {
-                interpolators_[i].reset();
-            }
-        } else {
-            juce::Logger::writeToLog("MediaAudioSource: No resampling needed - Sample rate: " + juce::String(sampleRate) + " Hz");
-        }
+        // Don't determine resampling needs here - we'll check dynamically based on actual frame data
+        // since the AudioDecoder already handles resampling to the target format
+        needsResampling_ = false;
+        resampleRatio_ = 1.0;
         
-        updateResamplingConfig();
+        juce::Logger::writeToLog("MediaAudioSource: Prepared for " + juce::String(sampleRate) + 
+                                " Hz output, will check frame sample rates dynamically");
     }
     
     // Prepare temp buffers
@@ -91,47 +79,17 @@ void MediaAudioSource::getNextAudioBlock(const juce::AudioSourceChannelInfo& buf
     
     int samplesNeeded = bufferToFill.numSamples;
     
-    if (needsResampling_)
+    // Direct copy without resampling - AudioDecoder already handles sample rate conversion
+    int samplesFilled = fillFromAudioBuffer(*bufferToFill.buffer, bufferToFill.startSample, samplesNeeded);
+    
+    // Clear any unfilled samples
+    if (samplesFilled < samplesNeeded)
     {
-        // Fill temp buffer with source data
-        int sourceSamplesNeeded = static_cast<int>(samplesNeeded / resampleRatio_) + 1;
         const int channels = std::min(bufferToFill.buffer->getNumChannels(), outputChannels_);
-        ensureBufferSizes(channels, sourceSamplesNeeded);
-        
-        int sourceSamplesFilled = fillFromAudioBuffer(tempBuffer_, 0, sourceSamplesNeeded);
-        
-        if (sourceSamplesFilled > 0) {
-            // Resample to output buffer
-            ensureBufferSizes(channels, samplesNeeded);
-            if (resampleAudio(tempBuffer_, resampleBuffer_)) {
-                // Copy resampled data to output
-                for (int ch = 0; ch < channels; ++ch) {
-                    bufferToFill.buffer->copyFrom(ch, bufferToFill.startSample,
-                                                resampleBuffer_, ch, 0, samplesNeeded);
-                }
-            } else {
-                bufferToFill.clearActiveBufferRegion();
-                return;
-            }
-        } else {
-            bufferToFill.clearActiveBufferRegion();
-            return;
-        }
-    }
-    else
-    {
-        // Direct copy without resampling
-        int samplesFilled = fillFromAudioBuffer(*bufferToFill.buffer, bufferToFill.startSample, samplesNeeded);
-        
-        // Clear any unfilled samples
-        if (samplesFilled < samplesNeeded)
+        for (int ch = 0; ch < channels; ++ch)
         {
-            const int channels = std::min(bufferToFill.buffer->getNumChannels(), outputChannels_);
-            for (int ch = 0; ch < channels; ++ch)
-            {
-                bufferToFill.buffer->clear(ch, bufferToFill.startSample + samplesFilled,
-                                         samplesNeeded - samplesFilled);
-            }
+            bufferToFill.buffer->clear(ch, bufferToFill.startSample + samplesFilled,
+                                     samplesNeeded - samplesFilled);
         }
     }
     
@@ -217,7 +175,18 @@ int MediaAudioSource::fillFromAudioBuffer(juce::AudioBuffer<float>& output, int 
             }
             
             juce::Logger::writeToLog("MediaAudioSource: Successfully got frame with " + juce::String(currentFrame_.numSamples) + 
-                                    " samples, " + juce::String(currentFrame_.numChannels) + " channels");
+                                    " samples, " + juce::String(currentFrame_.numChannels) + " channels, " +
+                                    juce::String(currentFrame_.sampleRate) + " Hz");
+            
+            // Check if this frame needs resampling based on its actual sample rate
+            if (currentFrame_.sampleRate > 0 && currentFrame_.sampleRate != static_cast<int>(outputSampleRate_)) {
+                juce::Logger::writeToLog("MediaAudioSource: Frame sample rate (" + juce::String(currentFrame_.sampleRate) + 
+                                        " Hz) differs from output (" + juce::String(outputSampleRate_) + 
+                                        " Hz) - this should not happen with AudioDecoder");
+                // In this case, we could implement frame-specific resampling if needed,
+                // but this indicates an issue with the AudioDecoder configuration
+            }
+            
             hasActiveFrame_ = true;
             framePosition_ = 0;
         }
@@ -339,31 +308,14 @@ int MediaAudioSource::convertFrameToBuffer(const AudioFrame& frame, juce::AudioB
 }
 
 bool MediaAudioSource::needsSampleRateConversion() const {
-    const StreamInfo* audioStream = mediaInfo_.getAudioStream();
-    if (!audioStream) {
-        return false;
-    }
-    
-    return audioStream->sampleRate != static_cast<int>(outputSampleRate_);
+    // AudioDecoder handles all sample rate conversion, so MediaAudioSource doesn't need to resample
+    return false;
 }
 
 void MediaAudioSource::updateResamplingConfig() {
-    const StreamInfo* audioStream = mediaInfo_.getAudioStream();
-    if (!audioStream) {
-        needsResampling_ = false;
-        return;
-    }
-    
-    needsResampling_ = needsSampleRateConversion();
-    
-    if (needsResampling_) {
-        resampleRatio_ = outputSampleRate_ / audioStream->sampleRate;
-        
-        // Reset interpolators for clean resampling
-        for (int i = 0; i < outputChannels_; ++i) {
-            interpolators_[i].reset();
-        }
-    }
+    // AudioDecoder handles all sample rate conversion, so no resampling configuration needed here
+    needsResampling_ = false;
+    resampleRatio_ = 1.0;
 }
 
 void MediaAudioSource::ensureBufferSizes(int numChannels, int numSamples) {

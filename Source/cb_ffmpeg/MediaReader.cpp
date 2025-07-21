@@ -130,6 +130,16 @@ bool MediaReader::loadFile(const juce::File& file)
             {
                 juce::Logger::writeToLog("MediaReader: AudioDecoder initialized successfully");
                 
+                // Start the audio decoder immediately after initialization
+                if (audioDecoder_->start())
+                {
+                    juce::Logger::writeToLog("MediaReader: AudioDecoder started successfully");
+                }
+                else
+                {
+                    juce::Logger::writeToLog("MediaReader: Failed to start AudioDecoder");
+                }
+                
                 // Create media audio source
                 mediaAudioSource_ = std::make_unique<MediaAudioSource>(*audioBuffer_, mediaInfo_);
                 audioSource_ = mediaAudioSource_.get();
@@ -171,9 +181,12 @@ bool MediaReader::loadFromMemory(const void* data, size_t size, const juce::Stri
 
 void MediaReader::unload()
 {
+    juce::Logger::writeToLog("MediaReader::unload() called");
+    
     // Stop audio decoding if running
     if (audioDecoder_)
     {
+        juce::Logger::writeToLog("MediaReader: Stopping AudioDecoder");
         audioDecoder_->stop();
         audioDecoder_.reset();
     }
@@ -183,25 +196,37 @@ void MediaReader::unload()
     mediaAudioSource_.reset();
     audioBuffer_.reset();
     
+    // Close format context
     if (formatContext_)
     {
         avformat_close_input(&formatContext_);
         formatContext_ = nullptr;
     }
+    
+    // Reset media info and state
     mediaInfo_ = {};
+    setPlaybackState(PlaybackState::Stopped);
+    
+    juce::Logger::writeToLog("MediaReader: Unload completed");
 }
 
 void MediaReader::play()
 {
     juce::Logger::writeToLog("MediaReader::play() called");
     
-    if (audioDecoder_ && audioDecoder_->getState() != DecoderState::Destroyed)
+    if (audioDecoder_)
     {
         juce::Logger::writeToLog("MediaReader: AudioDecoder exists, current state: " + juce::String(static_cast<int>(audioDecoder_->getState())));
         
-        if (audioDecoder_->getState() == DecoderState::Uninitialized || 
-            audioDecoder_->getState() == DecoderState::Ready ||
-            audioDecoder_->getState() == DecoderState::EndOfStream)
+        // If decoder is already running (started during loadFile), just set playback state
+        if (audioDecoder_->getState() == DecoderState::Decoding)
+        {
+            setPlaybackState(PlaybackState::Playing);
+            if (callback_) callback_->onPlaybackStarted();
+            juce::Logger::writeToLog("MediaReader: AudioDecoder already running, setting playback state to Playing");
+        }
+        // If decoder is ready but not started, start it now
+        else if (audioDecoder_->getState() == DecoderState::Ready)
         {
             juce::Logger::writeToLog("MediaReader: Starting audio decoder");
             if (audioDecoder_->start())
@@ -215,11 +240,20 @@ void MediaReader::play()
                 juce::Logger::writeToLog("MediaReader: Failed to start audio decoder");
             }
         }
+        // If decoder ended, restart it
+        else if (audioDecoder_->getState() == DecoderState::EndOfStream)
+        {
+            juce::Logger::writeToLog("MediaReader: Restarting audio decoder from end of stream");
+            // TODO: Implement seek to beginning and restart
+            setPlaybackState(PlaybackState::Playing);
+            if (callback_) callback_->onPlaybackStarted();
+        }
+        // Handle paused state
         else if (getPlaybackState() == PlaybackState::Paused)
         {
             setPlaybackState(PlaybackState::Playing);
             if (callback_) callback_->onPlaybackStarted();
-            juce::Logger::writeToLog("MediaReader: Audio playback resumed");
+            juce::Logger::writeToLog("MediaReader: Audio playback resumed from pause");
         }
         else
         {

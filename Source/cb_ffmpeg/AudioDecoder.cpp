@@ -236,26 +236,22 @@ void AudioDecoder::decoderLoop()
         // Check if this packet belongs to our audio stream
         if (packet->stream_index == streamIndex_)
         {
-            // Check buffer capacity before decoding
-            if (audioBuffer_.getBufferLevel() > 0.9) // More than 90% full
+            // Wait for buffer space without dropping packets
+            while (audioBuffer_.getBufferLevel() > 0.8 && !shouldStop_.load()) // More than 80% full
             {
-                juce::Logger::writeToLog("AudioDecoder: Buffer nearly full (" + juce::String(audioBuffer_.getBufferLevel() * 100, 1) + "%), waiting...");
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                av_packet_unref(packet);
-                continue; // Skip this packet and try again
+                juce::Logger::writeToLog("AudioDecoder: Buffer nearly full (" + juce::String(audioBuffer_.getBufferLevel() * 100, 1) + "%), waiting for space...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+            
+            // If we're stopping, break out
+            if (shouldStop_.load()) {
+                break;
             }
             
             // Decode the packet
             if (!decodePacket(packet))
             {
                 juce::Logger::writeToLog("AudioDecoder: Failed to decode packet");
-                
-                // If buffer is nearly full, this might be why decode failed
-                if (audioBuffer_.getBufferLevel() > 0.8)
-                {
-                    juce::Logger::writeToLog("AudioDecoder: Decode failed with high buffer level, throttling...");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                }
                 // Continue with next packet instead of stopping
             }
         }
