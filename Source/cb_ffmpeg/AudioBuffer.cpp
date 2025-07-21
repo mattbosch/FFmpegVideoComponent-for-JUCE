@@ -45,8 +45,10 @@ bool AudioBuffer::push(AudioFrame&& frame) {
 
 bool AudioBuffer::pop(AudioFrame& frame) {
     // Check if we have data
-    if (getAvailableFramesInternal() == 0) {
+    size_t available = getAvailableFramesInternal();
+    if (available == 0) {
         underrunCount_.fetch_add(1);
+        juce::Logger::writeToLog("AudioBuffer: pop() failed - no frames available (buffer empty)");
         return false;
     }
     
@@ -58,6 +60,9 @@ bool AudioBuffer::pop(AudioFrame& frame) {
     
     // Update read index atomically
     readIndex_.store(nextIndex(readPos));
+    
+    juce::Logger::writeToLog("AudioBuffer: pop() success - consumed frame, " + juce::String(available - 1) + 
+                            " frames remaining, buffer level now: " + juce::String(getBufferLevel() * 100, 1) + "%");
     
     return true;
 }

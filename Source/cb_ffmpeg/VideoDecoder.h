@@ -1,7 +1,8 @@
 #pragma once
 
-#include "MediaReaderTypes.h"
 #include "VideoBuffer.h"
+#include "MediaReaderTypes.h"
+#include "MediaReaderConfig.h"
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -89,7 +90,7 @@ public:
     /**
      * Get decoder statistics
      */
-    DecoderStats getStats() const { return stats_; }
+    DecoderStats::Snapshot getStats() const { return stats_.getSnapshot(); }
     
     /**
      * Reset statistics

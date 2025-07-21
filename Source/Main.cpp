@@ -6,29 +6,16 @@
   ==============================================================================
 */
 
-#include <juce_core/juce_core.h>
-#include <juce_audio_basics/juce_audio_basics.h>
-#include <juce_audio_devices/juce_audio_devices.h>
-#include <juce_audio_formats/juce_audio_formats.h>
-#include <juce_audio_utils/juce_audio_utils.h>
-#include <juce_graphics/juce_graphics.h>
-#include <juce_gui_basics/juce_gui_basics.h>
-#include <juce_gui_extra/juce_gui_extra.h>
+#include "JuceHeader.h"
 #include "MainComponent.h"
-
-#if JUCE_WINDOWS
-#include "windows.h"
-#endif
-
-
-
+#include "../juce_ffmpeg.h"
 
 //==============================================================================
-class ffmpeg_testApplication  : public juce::JUCEApplication
+class FFmpegVideoComponentApplication  : public juce::JUCEApplication
 {
 public:
     //==============================================================================
-    ffmpeg_testApplication() {}
+    FFmpegVideoComponentApplication() {}
 
     const juce::String getApplicationName() override       { return ProjectInfo::projectName; }
     const juce::String getApplicationVersion() override    { return ProjectInfo::versionString; }
@@ -37,8 +24,15 @@ public:
     //==============================================================================
     void initialise (const juce::String& commandLine) override
     {
+        auto logFile = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+                           .getChildFile("FFmpegVideoComponent.log");
+        logFile.deleteFile(); // Optional: clear old logs on each run
+
+        juce::Logger::setCurrentLogger(new juce::FileLogger(logFile, "FFmpegVideoComponent Log"));
+
+        juce::Logger::writeToLog("FFmpeg version: " + cb_ffmpeg::getFFmpegVersion());
         // This method is where you should put your application's initialisation code..
-        
+        cb_ffmpeg::initializeModule();
         mainWindow.reset (new MainWindow (getApplicationName()));
     }
 
@@ -47,6 +41,8 @@ public:
         // Add your application's shutdown code here..
 
         mainWindow = nullptr; // (deletes our window)
+        cb_ffmpeg::shutdownModule();
+        juce::Logger::setCurrentLogger(nullptr);
     }
 
     //==============================================================================
@@ -60,7 +56,7 @@ public:
     void anotherInstanceStarted (const juce::String& commandLine) override
     {
         // When another instance of the app is launched while this one is running,
-        // this method is invoked, and the commandLine parameter tells you what
+        // this method is called, and the commandLine parameter tells you what
         // the other instance's command-line arguments were.
     }
 
@@ -99,11 +95,8 @@ public:
             JUCEApplication::getInstance()->systemRequestedQuit();
         }
 
-        /* Note: Be careful if you override any DocumentWindow methods - the base
-           class uses a lot of them, so by overriding you might break its functionality.
-           It's best to do all your work in your content component instead, but if
-           you really have to override any DocumentWindow methods, make sure your
-           subclass also calls the superclass's method.
+        /* Note: Be careful when overriding juce::Component methods - a common mistake is to
+           forget to call the base class's method first!
         */
 
     private:
@@ -116,4 +109,4 @@ private:
 
 //==============================================================================
 // This macro generates the main() routine that launches the app.
-START_JUCE_APPLICATION (ffmpeg_testApplication)
+START_JUCE_APPLICATION (FFmpegVideoComponentApplication)

@@ -1,77 +1,29 @@
 #include "MainComponent.h"
 
-//==============================================================================
 MainComponent::MainComponent()
 {
-    // Initialize the cb_ffmpeg module
-    if (!cb_ffmpeg::initializeModule()) {
-        DBG("Failed to initialize cb_ffmpeg module");
-        jassertfalse;
-    }
-    
-    // Create MediaReader with high-quality configuration
-    config_ = cb_ffmpeg::MediaReaderConfig::createHighQualityConfig();
-    config_.audioBufferSizeMs = 500;  // 500ms audio buffer
-    config_.enableHardwareDecoding = true;
-    config_.enableDebugLogging = true;
-    
-    mediaReader_ = std::make_unique<cb_ffmpeg::MediaReader>(config_);
-    
     setupUI();
-    
-    // Enable keyboard focus for file drag-and-drop
-    setWantsKeyboardFocus(true);
-    
-    // Start UI update timer
-    startTimerHz(30); // 30 FPS UI updates
-    
-    setSize(1000, 700);
+    initializeAudio();
+    startTimerHz(30);
 }
 
 MainComponent::~MainComponent()
 {
-    stopTimer();
-    
-    // Stop playback and cleanup
-    if (mediaReader_) {
-        mediaReader_->stop();
-        mediaReader_.reset();
-    }
-    
-    // Shutdown the module
-    cb_ffmpeg::shutdownModule();
+    shutdownAudio();
 }
-
-//==============================================================================
-// juce::Component Implementation
 
 void MainComponent::paint(juce::Graphics& g)
 {
-    // Background gradient
-    auto bounds = getLocalBounds();
-    juce::ColourGradient gradient = juce::ColourGradient::vertical(
-        juce::Colours::darkgrey.darker(0.4f), 0.0f,
-        juce::Colours::black, static_cast<float>(getHeight())
-    );
-    g.setGradientFill(gradient);
-    g.fillRect(bounds);
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId));
     
-    // Title
-    g.setColour(juce::Colours::white.withAlpha(0.8f));
-    g.setFont(juce::Font(20.0f, juce::Font::bold));
-    g.drawText("CB FFmpeg Universal Media Player", 
-               bounds.removeFromTop(60), 
-               juce::Justification::centred, true);
-    
-    // Draw video area border if no video component
-    if (!videoDisplay_ && isMediaLoaded_) {
-        auto videoArea = bounds.reduced(10).removeFromTop(bounds.getHeight() - 150);
-        g.setColour(juce::Colours::darkgrey);
-        g.drawRect(videoArea, 2);
-        
-        g.setColour(juce::Colours::white.withAlpha(0.5f));
-        g.setFont(16.0f);
-        g.drawText("Audio Only", videoArea, juce::Justification::centred, true);
+    if (isDragHover_)
+    {
+        g.setColour(juce::Colours::white.withAlpha(0.3f));
+        g.fillAll();
+        g.setColour(juce::Colours::white);
+        g.drawRect(getLocalBounds(), 2.0f);
+        g.setFont(juce::FontOptions(24.0f));
+        g.drawText("Drop Media File Here", getLocalBounds(), juce::Justification::centred);
     }
 }
 
@@ -79,337 +31,324 @@ void MainComponent::resized()
 {
     auto bounds = getLocalBounds().reduced(10);
     
-    // Title area
-    bounds.removeFromTop(60);
+    auto topArea = bounds.removeFromTop(120);
+    transportGroup_.setBounds(topArea.removeFromLeft(topArea.getWidth() / 2));
+    infoGroup_.setBounds(topArea);
     
-    // Video display area (takes most of the space)
-    auto videoArea = bounds.removeFromTop(bounds.getHeight() - 120);
-    if (videoDisplay_) {
-        videoDisplay_->setBounds(videoArea);
-    }
+    bounds.removeFromTop(10);
     
-    bounds.removeFromTop(10); // spacing
+    playerComponent.setBounds(bounds);
     
-    // Control panel
-    auto controlPanel = bounds.removeFromTop(100);
+    // Layout transport controls within transportGroup_
+    auto transportBounds = transportGroup_.getLocalBounds().reduced(10);
+    transportBounds.removeFromTop(20); // Space for group title
     
-    // Top row: File operations and playback controls
-    auto topRow = controlPanel.removeFromTop(35);
-    openButton_.setBounds(topRow.removeFromLeft(120));
-    topRow.removeFromLeft(10);
-    playPauseButton_.setBounds(topRow.removeFromLeft(80));
-    topRow.removeFromLeft(5);
-    stopButton_.setBounds(topRow.removeFromLeft(60));
-    topRow.removeFromLeft(20);
-    loopButton_.setBounds(topRow.removeFromLeft(60));
-    topRow.removeFromLeft(10);
-    muteButton_.setBounds(topRow.removeFromLeft(60));
+    // First row: buttons
+    auto buttonRow = transportBounds.removeFromTop(30);
+    openButton_.setBounds(buttonRow.removeFromLeft(80));
+    buttonRow.removeFromLeft(5);
+    playPauseButton_.setBounds(buttonRow.removeFromLeft(60));
+    buttonRow.removeFromLeft(5);
+    stopButton_.setBounds(buttonRow.removeFromLeft(50));
+    buttonRow.removeFromLeft(10);
+    muteButton_.setBounds(buttonRow.removeFromRight(60));
     
-    controlPanel.removeFromTop(10); // spacing
+    transportBounds.removeFromTop(10);
     
-    // Position slider and label
-    auto positionRow = controlPanel.removeFromTop(25);
-    positionSlider_.setBounds(positionRow.removeFromLeft(positionRow.getWidth() - 150));
-    positionRow.removeFromLeft(10);
-    positionLabel_.setBounds(positionRow);
+    // Second row: position slider and label
+    auto sliderRow = transportBounds.removeFromTop(25);
+    positionLabel_.setBounds(sliderRow.removeFromRight(100));
+    sliderRow.removeFromRight(10);
+    positionSlider_.setBounds(sliderRow);
     
-    controlPanel.removeFromTop(5); // spacing
+    transportBounds.removeFromTop(5);
     
-    // Volume controls
-    auto volumeRow = controlPanel.removeFromTop(25);
-    volumeLabel_.setBounds(volumeRow.removeFromLeft(60));
-    volumeRow.removeFromLeft(10);
-    volumeSlider_.setBounds(volumeRow.removeFromLeft(200));
+    // Third row: volume slider
+    auto volumeRow = transportBounds.removeFromTop(25);
+    volumeRow.removeFromLeft(50); // Some spacing
+    volumeSlider_.setBounds(volumeRow.removeFromLeft(150));
+    
+    // Layout info display within infoGroup_
+    auto infoBounds = infoGroup_.getLocalBounds().reduced(10);
+    infoBounds.removeFromTop(20); // Space for group title
+    infoDisplay_.setBounds(infoBounds);
 }
-
-//==============================================================================
-// juce::AudioSource Implementation
-
-void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate)
-{
-    if (mediaReader_ && mediaReader_->hasAudio()) {
-        auto* audioSource = mediaReader_->getAudioSource();
-        if (audioSource) {
-            audioSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
-        }
-    }
-}
-
-void MainComponent::releaseResources()
-{
-    if (mediaReader_ && mediaReader_->hasAudio()) {
-        auto* audioSource = mediaReader_->getAudioSource();
-        if (audioSource) {
-            audioSource->releaseResources();
-        }
-    }
-}
-
-void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
-{
-    if (mediaReader_ && mediaReader_->hasAudio() && isPlaying_) {
-        auto* audioSource = mediaReader_->getAudioSource();
-        if (audioSource) {
-            audioSource->getNextAudioBlock(bufferToFill);
-            return;
-        }
-    }
-    
-    // No audio or not playing - output silence
-    bufferToFill.clearActiveBufferRegion();
-}
-
-//==============================================================================
-// Timer Callback for UI Updates
 
 void MainComponent::timerCallback()
 {
-    if (!mediaReader_ || !isMediaLoaded_)
-        return;
-    
-    // Update playback position
-    currentTime_ = mediaReader_->getCurrentPosition();
-    
-    // Update position slider (but not if user is dragging it)
-    if (!isDraggingPosition_) {
-        positionSlider_.setValue(currentTime_, juce::dontSendNotification);
+    if (!isDraggingPosition_)
+    {
+        updatePositionDisplay();
     }
-    
-    updatePositionDisplay();
-    
-    // Check for end of playback (check if current position is close to duration)
-    if (isPlaying_ && currentTime_ >= (duration_ - 0.1)) {  // 0.1 second tolerance
-        if (loopButton_.getToggleState()) {
-            // Loop playback
-            mediaReader_->seek(0.0);
-        } else {
-            // Stop at end
-            stopPlayback();
-        }
-    }
-    
-    // Update video position if we have video
-    if (videoDisplay_ && mediaReader_->hasVideo()) {
-        // Video component updates itself based on the buffer
-        repaint(); // Trigger video frame updates
-    }
+    updatePlayPauseButton();
 }
-
-//==============================================================================
-// Button Listener
 
 void MainComponent::buttonClicked(juce::Button* button)
 {
-    if (button == &openButton_) {
-        openMediaFile();
-    }
-    else if (button == &playPauseButton_) {
-        togglePlayPause();
-    }
-    else if (button == &stopButton_) {
-        stopPlayback();
-    }
-    else if (button == &loopButton_) {
-        // Loop state is handled in timerCallback
-    }
-    else if (button == &muteButton_) {
-        bool shouldMute = muteButton_.getToggleState();
-        if (mediaReader_ && mediaReader_->hasAudio()) {
-            auto* audioSource = dynamic_cast<cb_ffmpeg::MediaAudioSource*>(mediaReader_->getAudioSource());
-            if (audioSource) {
-                audioSource->setGain(shouldMute ? 0.0 : volumeSlider_.getValue());
-            }
+    if (button == &openButton_)
+    {
+        juce::FileChooser chooser("Select a media file to play...", {},
+                                  "*.mp4;*.mov;*.avi;*.mkv;*.webm;*.mp3;*.wav;*.flac;*.aac;*.ogg;*.jpg;*.jpeg;*.png;.gif");
+        if (chooser.browseForFileToOpen())
+        {
+            loadMediaFile(chooser.getResult());
         }
     }
+    else if (button == &playPauseButton_)
+    {
+        playerComponent.togglePlayPause();
+    }
+    else if (button == &stopButton_)
+    {
+        playerComponent.stopPlayback();
+    }
+    else if (button == &muteButton_)
+    {
+        bool newMutedState = !playerComponent.isMuted();
+        playerComponent.setMuted(newMutedState);
+        muteButton_.setToggleState(newMutedState, juce::dontSendNotification);
+        muteButton_.setButtonText(newMutedState ? "Unmute" : "Mute");
+    }
 }
-
-//==============================================================================
-// Slider Listener
 
 void MainComponent::sliderValueChanged(juce::Slider* slider)
 {
-    if (slider == &positionSlider_) {
-        if (isDraggingPosition_ && mediaReader_ && isMediaLoaded_) {
-            double newPosition = positionSlider_.getValue();
-            mediaReader_->seek(newPosition);
-            currentTime_ = newPosition;
-            updatePositionDisplay();
-        }
+    if (slider == &volumeSlider_)
+    {
+        playerComponent.setVolume(volumeSlider_.getValue());
     }
-    else if (slider == &volumeSlider_) {
-        if (mediaReader_ && mediaReader_->hasAudio() && !muteButton_.getToggleState()) {
-            auto* audioSource = dynamic_cast<cb_ffmpeg::MediaAudioSource*>(mediaReader_->getAudioSource());
-            if (audioSource) {
-                audioSource->setGain(volumeSlider_.getValue());
-            }
+    else if (slider == &positionSlider_)
+    {
+        // Position slider handled in drag ended for seeking
+    }
+}
+
+void MainComponent::sliderDragStarted(juce::Slider* slider)
+{
+    if (slider == &positionSlider_)
+    {
+        isDraggingPosition_ = true;
+    }
+}
+
+void MainComponent::sliderDragEnded(juce::Slider* slider)
+{
+    if (slider == &positionSlider_)
+    {
+        if (playerComponent.isMediaLoaded() && playerComponent.getDuration() > 0)
+        {
+            double newPosition = (positionSlider_.getValue() / 100.0) * playerComponent.getDuration();
+            // TODO: Implement seeking in MediaReader
+            // playerComponent.seek(newPosition);
+            juce::Logger::writeToLog("Seek requested to: " + juce::String(newPosition) + "s (not yet implemented in MediaReader)");
+        }
+        isDraggingPosition_ = false;
+    }
+}
+
+bool MainComponent::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    if (files.size() == 1)
+    {
+        return isMediaFileSupported(juce::File(files[0]));
+    }
+    return false;
+}
+
+void MainComponent::fileDragEnter(const juce::StringArray& files, int x, int y)
+{
+    isDragHover_ = true;
+    repaint();
+}
+
+void MainComponent::fileDragExit(const juce::StringArray& files)
+{
+    isDragHover_ = false;
+    repaint();
+}
+
+void MainComponent::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    isDragHover_ = false;
+    if (files.size() == 1)
+    {
+        loadMediaFile(juce::File(files[0]));
+    }
+    repaint();
+}
+
+void MainComponent::openFile()
+{
+    juce::FileChooser chooser("Select a media file to open...",
+                              juce::File(),
+                              "*.mp4;*.mov;*.avi;*.mp3;*.wav;*.flac");
+    
+    if (chooser.browseForFileToOpen())
+    {
+        juce::File file = chooser.getResult();
+        if (file.exists())
+        {
+            loadMediaFile(file);
         }
     }
 }
 
-//==============================================================================
-// Private Helper Methods
+void MainComponent::initializeAudio()
+{
+    juce::AudioDeviceManager::AudioDeviceSetup setup;
+    setup.outputChannels = 2;
+    setup.sampleRate = 44100.0; // Match MediaReader default sample rate
+    setup.bufferSize = 512;     // Set a reasonable buffer size
+    
+    auto err = audioDeviceManager_.initialise(0, 2, nullptr, true, {}, &setup);
+    if (err.isNotEmpty())
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Audio Init Error", err);
+    }
+    else
+    {
+        audioDeviceManager_.addAudioCallback(&playerComponent);
+        juce::Logger::writeToLog("MainComponent: Audio initialized at " + juce::String(setup.sampleRate) + " Hz");
+    }
+}
+
+void MainComponent::shutdownAudio()
+{
+    audioDeviceManager_.removeAudioCallback(&playerComponent);
+    audioDeviceManager_.closeAudioDevice();
+}
 
 void MainComponent::setupUI()
 {
-    // Configure buttons
-    addAndMakeVisible(openButton_);
-    addAndMakeVisible(playPauseButton_);
-    addAndMakeVisible(stopButton_);
-    addAndMakeVisible(loopButton_);
-    addAndMakeVisible(muteButton_);
-    
+    addAndMakeVisible(playerComponent);
+
+    // Create and add groups
+    addAndMakeVisible(transportGroup_);
+    addAndMakeVisible(infoGroup_);
+
+    // Transport Controls - add to transportGroup
+    transportGroup_.addAndMakeVisible(openButton_);
     openButton_.addListener(this);
+    
+    transportGroup_.addAndMakeVisible(playPauseButton_);
     playPauseButton_.addListener(this);
-    stopButton_.addListener(this);
-    loopButton_.addListener(this);
-    muteButton_.addListener(this);
-    
-    // Configure sliders
-    addAndMakeVisible(positionSlider_);
-    addAndMakeVisible(volumeSlider_);
-    
-    positionSlider_.setRange(0.0, 100.0);
-    positionSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    positionSlider_.addListener(this);
-    
-    // Add mouse listeners to track dragging
-    positionSlider_.onDragStart = [this]() { isDraggingPosition_ = true; };
-    positionSlider_.onDragEnd = [this]() { isDraggingPosition_ = false; };
-    
-    volumeSlider_.setRange(0.0, 1.0);
-    volumeSlider_.setValue(0.7);
-    volumeSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    volumeSlider_.addListener(this);
-    
-    // Configure labels
-    addAndMakeVisible(positionLabel_);
-    addAndMakeVisible(volumeLabel_);
-    
-    // Initial button states
     playPauseButton_.setEnabled(false);
+    
+    transportGroup_.addAndMakeVisible(stopButton_);
+    stopButton_.addListener(this);
     stopButton_.setEnabled(false);
+    
+    transportGroup_.addAndMakeVisible(positionSlider_);
+    positionSlider_.addListener(this);
+    positionSlider_.setRange(0, 100, 0);
+    positionSlider_.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     positionSlider_.setEnabled(false);
+
+    transportGroup_.addAndMakeVisible(positionLabel_);
+    
+    transportGroup_.addAndMakeVisible(volumeSlider_);
+    volumeSlider_.addListener(this);
+    volumeSlider_.setRange(0, 1, 0.01);
+    volumeSlider_.setValue(0.7);
+    
+    transportGroup_.addAndMakeVisible(muteButton_);
+    muteButton_.addListener(this);
+    muteButton_.setClickingTogglesState(true);
+    muteButton_.setButtonText("Mute");
+
+    // Info Display - add to infoGroup
+    infoGroup_.addAndMakeVisible(infoDisplay_);
+    infoDisplay_.setMultiLine(true);
+    infoDisplay_.setReadOnly(true);
+    infoDisplay_.setFont(juce::FontOptions(14.0f));
+    
+    setSize(800, 600);
 }
 
-void MainComponent::openMediaFile()
+void MainComponent::loadMediaFile(const juce::File& file)
 {
-    juce::FileChooser chooser("Select Media File", 
-                             juce::File{}, 
-                             "*.mp4;*.mov;*.avi;*.mkv;*.webm;*.mp3;*.wav;*.flac;*.aac;*.ogg;*.m4a;*.jpg;*.png;*.bmp;*.tiff");
-    
-    if (chooser.browseForFileToOpen()) {
-        auto file = chooser.getResult();
+    if (playerComponent.loadMediaFile(file))
+    {
+        currentFilename_ = file.getFileName();
+        playPauseButton_.setEnabled(true);
+        stopButton_.setEnabled(true);
+        positionSlider_.setEnabled(true);
+        positionSlider_.setRange(0, playerComponent.getDuration(), 0.1);
         
-        // Stop current playback
-        if (isPlaying_) {
-            stopPlayback();
-        }
+        // Apply current volume settings
+        playerComponent.setVolume(volumeSlider_.getValue());
+        playerComponent.setMuted(muteButton_.getToggleState());
         
-        // Load new file
-        if (mediaReader_->loadFile(file)) {
-            isMediaLoaded_ = true;
-            duration_ = mediaReader_->getDuration();
-            
-            // Configure UI for the loaded media
-            positionSlider_.setRange(0.0, duration_);
-            positionSlider_.setValue(0.0);
-            positionSlider_.setEnabled(true);
-            
-            playPauseButton_.setEnabled(true);
-            stopButton_.setEnabled(true);
-            
-            // Setup video display if video is present
-            if (mediaReader_->hasVideo()) {
-                videoDisplay_ = std::unique_ptr<juce::Component>(mediaReader_->getVideoComponent());
-                if (videoDisplay_) {
-                    addAndMakeVisible(*videoDisplay_);
-                }
-            } else {
-                videoDisplay_.reset();
-            }
-            
-            // Update volume if audio is present
-            if (mediaReader_->hasAudio()) {
-                auto* audioSource = dynamic_cast<cb_ffmpeg::MediaAudioSource*>(mediaReader_->getAudioSource());
-                if (audioSource) {
-                    audioSource->setGain(volumeSlider_.getValue());
-                }
-            }
-            
-            updatePositionDisplay();
-            resized(); // Reposition components
-            
-            DBG("Loaded media file: " << file.getFileName());
-            DBG("Duration: " << duration_ << " seconds");
-            DBG("Has audio: " << (mediaReader_->hasAudio() ? "Yes" : "No"));
-            DBG("Has video: " << (mediaReader_->hasVideo() ? "Yes" : "No"));
+        updateMediaInfo();
+        
+        // Show a brief notification that the file was loaded
+        juce::String message = "Loaded: " + file.getFileName();
+        if (playerComponent.getDuration() > 0)
+        {
+            message += " (" + juce::String(playerComponent.getDuration(), 1) + "s)";
         }
-        else {
-            juce::AlertWindow::showMessageBox(juce::AlertWindow::WarningIcon,
-                                            "Error",
-                                            "Failed to load media file: " + file.getFileName(),
-                                            "OK");
-        }
+        juce::Logger::writeToLog("UI: " + message);
     }
-}
-
-void MainComponent::togglePlayPause()
-{
-    if (!mediaReader_ || !isMediaLoaded_)
-        return;
-    
-    if (isPlaying_) {
-        mediaReader_->pause();
-        isPlaying_ = false;
-    } else {
-        mediaReader_->play();
-        isPlaying_ = true;
+    else
+    {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Error", "Could not load media file.");
     }
-    
-    updatePlayPauseButton();
-}
-
-void MainComponent::stopPlayback()
-{
-    if (!mediaReader_ || !isMediaLoaded_)
-        return;
-    
-    mediaReader_->stop();
-    isPlaying_ = false;
-    currentTime_ = 0.0;
-    positionSlider_.setValue(0.0, juce::dontSendNotification);
-    
-    updatePlayPauseButton();
-    updatePositionDisplay();
 }
 
 void MainComponent::updatePositionDisplay()
 {
-    juce::String currentTimeStr, durationStr;
-    formatTime(currentTime_, currentTimeStr);
-    formatTime(duration_, durationStr);
+    double currentTime = playerComponent.getCurrentTime();
+    double duration = playerComponent.getDuration();
+    positionSlider_.setValue(currentTime, juce::dontSendNotification);
     
-    positionLabel_.setText(currentTimeStr + " / " + durationStr, juce::dontSendNotification);
+    juce::String timeStr;
+    formatTime(currentTime, timeStr);
+    timeStr += " / ";
+    formatTime(duration, timeStr);
+    positionLabel_.setText(timeStr, juce::dontSendNotification);
 }
 
 void MainComponent::updatePlayPauseButton()
 {
-    playPauseButton_.setButtonText(isPlaying_ ? "Pause" : "Play");
-}
-
-void MainComponent::handleMediaStateChange()
-{
-    // This could be called from callbacks if needed
-    // For now, state changes are handled in timerCallback
+    playPauseButton_.setButtonText(playerComponent.isPlaying() ? "Pause" : "Play");
 }
 
 void MainComponent::formatTime(double seconds, juce::String& timeString)
 {
-    int totalSeconds = static_cast<int>(seconds);
-    int minutes = totalSeconds / 60;
+    int totalSeconds = static_cast<int>(round(seconds));
+    int mins = totalSeconds / 60;
     int secs = totalSeconds % 60;
-    
-    timeString = juce::String::formatted("%02d:%02d", minutes, secs);
+    timeString = juce::String::formatted("%02d:%02d", mins, secs);
+}
+
+bool MainComponent::isMediaFileSupported(const juce::File& file)
+{
+    // A rough check. PlayerComponent's MediaReader will do the real one.
+    return file.hasFileExtension(".mp4;.mov;.avi;.mkv;.webm;.mp3;.wav;.flac;.aac;.ogg;.jpg;.jpeg;.png;.gif");
+}
+
+void MainComponent::updateMediaInfo()
+{
+    if (playerComponent.isMediaLoaded())
+    {
+        juce::String info = "File: " + currentFilename_ + "\n";
+        
+        double duration = playerComponent.getDuration();
+        if (duration > 0)
+        {
+            int mins = (int)(duration / 60);
+            int secs = (int)duration % 60;
+            info += "Duration: " + juce::String::formatted("%d:%02d", mins, secs) + "\n";
+        }
+        
+        info += "Status: Ready to play";
+        
+        infoDisplay_.setText(info);
+    }
+    else
+    {
+        infoDisplay_.setText("No media file loaded\n\nDrag and drop a media file or click 'Open Media File'");
+    }
 }
 
 

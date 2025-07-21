@@ -1,409 +1,564 @@
 #include "AudioDecoder.h"
-#include <iostream>
 
-namespace cb
+namespace cb_ffmpeg
 {
 
-AudioDecoder::AudioDecoder(std::shared_ptr<AudioBuffer> buffer, const MediaReaderConfig& config)
-    : audioBuffer(buffer)
-    , config(config)
-    , shouldStop(false)
-    , isPaused(false)
-    , seekRequested(false)
-    , seekTime(0.0)
-    , currentTime(0.0)
-    , streamIndex(-1)
+AudioDecoder::AudioDecoder(AudioBuffer& audioBuffer, const MediaReaderConfig& config)
+    : config_(config), audioBuffer_(audioBuffer)
 {
 }
 
 AudioDecoder::~AudioDecoder()
 {
     stop();
+    
+    // Clean up FFmpeg resources
+    if (swrContext_)
+    {
+        swr_free(&swrContext_);
+    }
+    
+    if (codecContext_)
+    {
+        avcodec_free_context(&codecContext_);
+    }
+    
+    // Note: formatContext_ is not owned by us, so don't free it
 }
 
-bool AudioDecoder::initialize(AVFormatContext* formatContext, int audioStreamIndex)
+bool AudioDecoder::initialize(AVFormatContext* formatContext, int streamIndex)
 {
-    if (!formatContext || audioStreamIndex < 0)
+    if (!formatContext || streamIndex < 0)
+    {
+        setError("Invalid format context or stream index");
         return false;
-
-    formatCtx = formatContext;
-    streamIndex = audioStreamIndex;
+    }
     
-    // Get audio stream
-    AVStream* stream = formatCtx->streams[streamIndex];
-    codecParams = stream->codecpar;
+    // Store raw pointer - we don't own this
+    formatContext_ = formatContext;
+    streamIndex_ = streamIndex;
+    audioStream_ = formatContext->streams[streamIndex];
     
-    // Find decoder
-    const AVCodec* codec = avcodec_find_decoder(codecParams->codec_id);
+    if (!audioStream_)
+    {
+        setError("Audio stream not found");
+        return false;
+    }
+    
+    // Find the decoder for the audio stream
+    const AVCodec* codec = avcodec_find_decoder(audioStream_->codecpar->codec_id);
     if (!codec)
     {
-        if (config.enableLogging)
-            std::cerr << "AudioDecoder: Could not find audio decoder" << std::endl;
+        setError("Audio codec not found");
         return false;
     }
     
-    // Allocate codec context
-    codecCtx = AVCodecContextPtr(avcodec_alloc_context3(codec));
+    // Allocate codec context - use raw pointer for now
+    AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
     if (!codecCtx)
+    {
+        setError("Could not allocate audio codec context");
         return false;
+    }
     
-    // Copy codec parameters
-    if (avcodec_parameters_to_context(codecCtx.get(), codecParams) < 0)
+    // Copy codec parameters from input stream to output codec context
+    if (avcodec_parameters_to_context(codecCtx, audioStream_->codecpar) < 0)
+    {
+        avcodec_free_context(&codecCtx);
+        setError("Could not copy audio codec parameters");
         return false;
+    }
     
     // Open codec
-    if (avcodec_open2(codecCtx.get(), codec, nullptr) < 0)
+    if (avcodec_open2(codecCtx, codec, nullptr) < 0)
     {
-        if (config.enableLogging)
-            std::cerr << "AudioDecoder: Could not open audio codec" << std::endl;
+        avcodec_free_context(&codecCtx);
+        setError("Could not open audio codec");
         return false;
     }
     
-    // Initialize resampler if needed
-    if (!initializeResampler())
-        return false;
+    // Store the codec context
+    codecContext_ = codecCtx;
     
-    // Calculate time base
-    timeBase = av_q2d(stream->time_base);
+    // Extract stream info for MediaReader
+    streamInfo_.type = MediaType::AudioOnly;
+    streamInfo_.sampleRate = codecCtx->sample_rate;
+    streamInfo_.channels = codecCtx->ch_layout.nb_channels;
+    streamInfo_.duration = (double)audioStream_->duration * av_q2d(audioStream_->time_base);
+    streamInfo_.bitRate = codecCtx->bit_rate;
     
-    return true;
-}
-
-bool AudioDecoder::initializeResampler()
-{
-    // Get input format
-    AVSampleFormat inputFormat = codecCtx->sample_fmt;
-    int inputSampleRate = codecCtx->sample_rate;
-    AVChannelLayout inputChannelLayout;
-    av_channel_layout_copy(&inputChannelLayout, &codecCtx->ch_layout);
+    // Set up resampling if needed
+    targetSampleRate_ = config_.targetSampleRate;
+    targetChannels_ = config_.targetChannels;
+    needsResampling_ = (codecCtx->sample_rate != targetSampleRate_ || 
+                       codecCtx->ch_layout.nb_channels != targetChannels_);
     
-    // Set output format
-    AVSampleFormat outputFormat = AV_SAMPLE_FMT_FLT;
-    int outputSampleRate = config.audioConfig.targetSampleRate > 0 ? 
-                          config.audioConfig.targetSampleRate : inputSampleRate;
-    
-    AVChannelLayout outputChannelLayout;
-    if (config.audioConfig.targetChannels > 0)
-        av_channel_layout_default(&outputChannelLayout, config.audioConfig.targetChannels);
-    else
-        av_channel_layout_copy(&outputChannelLayout, &inputChannelLayout);
-    
-    // Check if resampling is needed
-    bool needsResampling = inputFormat != outputFormat ||
-                          inputSampleRate != outputSampleRate ||
-                          av_channel_layout_compare(&inputChannelLayout, &outputChannelLayout) != 0;
-    
-    if (needsResampling)
+    if (needsResampling_)
     {
-        // Allocate resampler
-        swrCtx = SwrContextPtr(swr_alloc());
-        if (!swrCtx)
-            return false;
+        // Set up software resampler
+        SwrContext* swrCtx = nullptr;
+        AVChannelLayout targetChannelLayout = AV_CHANNEL_LAYOUT_STEREO;
+        swr_alloc_set_opts2(&swrCtx,
+                           &targetChannelLayout, AV_SAMPLE_FMT_FLT, targetSampleRate_,
+                           &codecCtx->ch_layout, codecCtx->sample_fmt, codecCtx->sample_rate,
+                           0, nullptr);
         
-        // Set options
-        av_opt_set_chlayout(swrCtx.get(), "in_chlayout", &inputChannelLayout, 0);
-        av_opt_set_int(swrCtx.get(), "in_sample_rate", inputSampleRate, 0);
-        av_opt_set_sample_fmt(swrCtx.get(), "in_sample_fmt", inputFormat, 0);
-        
-        av_opt_set_chlayout(swrCtx.get(), "out_chlayout", &outputChannelLayout, 0);
-        av_opt_set_int(swrCtx.get(), "out_sample_rate", outputSampleRate, 0);
-        av_opt_set_sample_fmt(swrCtx.get(), "out_sample_fmt", outputFormat, 0);
-        
-        // Initialize resampler
-        if (swr_init(swrCtx.get()) < 0)
+        if (swr_init(swrCtx) < 0)
         {
-            if (config.enableLogging)
-                std::cerr << "AudioDecoder: Could not initialize resampler" << std::endl;
+            swr_free(&swrCtx);
+            setError("Could not initialize resampler");
             return false;
         }
+        
+        swrContext_ = swrCtx;
     }
     
-    // Store output format
-    outputChannels = outputChannelLayout.nb_channels;
-    outputSampleRate = outputSampleRate;
-    
-    av_channel_layout_uninit(&inputChannelLayout);
-    av_channel_layout_uninit(&outputChannelLayout);
+    state_.store(DecoderState::Ready);
+    juce::Logger::writeToLog("AudioDecoder initialized successfully - " + 
+                            juce::String(streamInfo_.sampleRate) + "Hz, " + 
+                            juce::String(streamInfo_.channels) + " channels");
     
     return true;
 }
 
-void AudioDecoder::start()
+bool AudioDecoder::start()
 {
-    if (decoderThread.joinable())
-        return;
+    if (state_.load() != DecoderState::Ready)
+    {
+        setError("Decoder not ready to start");
+        return false;
+    }
     
-    shouldStop = false;
-    decoderThread = std::thread(&AudioDecoder::decoderThreadFunction, this);
+    if (decoderThread_.joinable())
+    {
+        setError("Decoder thread already running");
+        return false;
+    }
+    
+    shouldStop_.store(false);
+    shouldSeek_.store(false);
+    
+    try
+    {
+        decoderThread_ = std::thread(&AudioDecoder::decoderLoop, this);
+        state_.store(DecoderState::Decoding);
+        juce::Logger::writeToLog("AudioDecoder started successfully");
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        setError("Failed to start decoder thread: " + juce::String(e.what()));
+        return false;
+    }
 }
 
 void AudioDecoder::stop()
 {
-    shouldStop = true;
+    shouldStop_.store(true);
     
-    if (decoderThread.joinable())
-        decoderThread.join();
+    if (decoderThread_.joinable())
+    {
+        decoderThread_.join();
+    }
+    
+    state_.store(DecoderState::Ready);
+    juce::Logger::writeToLog("AudioDecoder stopped");
 }
 
-void AudioDecoder::pause()
+void AudioDecoder::seek(double timeInSeconds, SeekMode mode)
 {
-    isPaused = true;
 }
 
-void AudioDecoder::resume()
+void AudioDecoder::flush()
 {
-    isPaused = false;
 }
 
-void AudioDecoder::seek(double timeInSeconds)
+void AudioDecoder::setPlaybackRate(double rate)
 {
-    seekTime = timeInSeconds;
-    seekRequested = true;
 }
 
-double AudioDecoder::getCurrentTime() const
+juce::String AudioDecoder::getLastError() const
 {
-    return currentTime;
+    return juce::String();
 }
 
-bool AudioDecoder::isFinished() const
+void AudioDecoder::decoderLoop()
 {
-    return shouldStop;
-}
-
-void AudioDecoder::decoderThreadFunction()
-{
-    AVPacketPtr packet(av_packet_alloc());
-    AVFramePtr frame(av_frame_alloc());
+    AVPacket* packet = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
     
     if (!packet || !frame)
-        return;
-    
-    while (!shouldStop)
     {
-        // Handle seek requests
-        if (seekRequested)
+        setError("Could not allocate packet or frame");
+        state_.store(DecoderState::Error);
+        return;
+    }
+    
+    juce::Logger::writeToLog("AudioDecoder: Starting decoder loop");
+    
+    while (!shouldStop_.load())
+    {
+        // Handle seeking
+        if (shouldSeek_.load())
         {
-            handleSeek();
-            seekRequested = false;
+            // TODO: Implement seeking
+            shouldSeek_.store(false);
         }
         
-        // Pause handling
-        if (isPaused)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-        }
+        // Read packet from input
+        int ret = av_read_frame(formatContext_, packet);
         
-        // Check buffer space
-        if (audioBuffer->getAvailableSpace() < config.audioConfig.bufferSizeFrames / 4)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
-        }
-        
-        // Read packet
-        int ret = av_read_frame(formatCtx, packet.get());
         if (ret < 0)
         {
             if (ret == AVERROR_EOF)
             {
-                // End of file - handle looping
-                if (config.enableLooping)
-                {
-                    seek(0.0);
-                    continue;
-                }
-                else
-                {
-                    shouldStop = true;
-                    break;
-                }
+                // End of file - flush decoder
+                juce::Logger::writeToLog("AudioDecoder: End of file reached");
+                state_.store(DecoderState::EndOfStream);
+                break;
+            }
+            else if (ret == AVERROR(EAGAIN))
+            {
+                // Would block - try again
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
             }
             else
             {
-                if (config.enableLogging)
-                    std::cerr << "AudioDecoder: Error reading frame: " << ret << std::endl;
+                char errbuf[128];
+                av_strerror(ret, errbuf, sizeof(errbuf));
+                setError("Error reading frame: " + juce::String(errbuf));
+                state_.store(DecoderState::Error);
                 break;
             }
         }
         
         // Check if this packet belongs to our audio stream
-        if (packet->stream_index != streamIndex)
+        if (packet->stream_index == streamIndex_)
         {
-            av_packet_unref(packet.get());
-            continue;
-        }
-        
-        // Send packet to decoder
-        ret = avcodec_send_packet(codecCtx.get(), packet.get());
-        av_packet_unref(packet.get());
-        
-        if (ret < 0)
-        {
-            if (config.enableLogging)
-                std::cerr << "AudioDecoder: Error sending packet to decoder: " << ret << std::endl;
-            continue;
-        }
-        
-        // Receive frames
-        while (ret >= 0 && !shouldStop)
-        {
-            ret = avcodec_receive_frame(codecCtx.get(), frame.get());
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                break;
-            
-            if (ret < 0)
+            // Check buffer capacity before decoding
+            if (audioBuffer_.getBufferLevel() > 0.9) // More than 90% full
             {
-                if (config.enableLogging)
-                    std::cerr << "AudioDecoder: Error receiving frame: " << ret << std::endl;
-                break;
+                juce::Logger::writeToLog("AudioDecoder: Buffer nearly full (" + juce::String(audioBuffer_.getBufferLevel() * 100, 1) + "%), waiting...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                av_packet_unref(packet);
+                continue; // Skip this packet and try again
             }
             
-            // Update current time
-            if (frame->pts != AV_NOPTS_VALUE)
-                currentTime = frame->pts * timeBase;
-            
-            // Process frame
-            if (!processFrame(frame.get()))
-                break;
-            
-            av_frame_unref(frame.get());
+            // Decode the packet
+            if (!decodePacket(packet))
+            {
+                juce::Logger::writeToLog("AudioDecoder: Failed to decode packet");
+                
+                // If buffer is nearly full, this might be why decode failed
+                if (audioBuffer_.getBufferLevel() > 0.8)
+                {
+                    juce::Logger::writeToLog("AudioDecoder: Decode failed with high buffer level, throttling...");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+                // Continue with next packet instead of stopping
+            }
         }
+        
+        av_packet_unref(packet);
     }
     
-    // Flush decoder
-    flushDecoder();
+    // Clean up
+    av_packet_free(&packet);
+    av_frame_free(&frame);
+    
+    juce::Logger::writeToLog("AudioDecoder: Decoder loop finished");
+}
+
+bool AudioDecoder::initializeCodec()
+{
+    return false;
+}
+
+bool AudioDecoder::initializeResampler()
+{
+    return false;
+}
+
+bool AudioDecoder::decodePacket(AVPacket* packet)
+{
+    if (!packet || !codecContext_)
+    {
+        return false;
+    }
+    
+    // Send packet to decoder
+    int ret = avcodec_send_packet(codecContext_, packet);
+    if (ret < 0 && ret != AVERROR(EAGAIN))
+    {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        juce::Logger::writeToLog("Error sending packet to decoder: " + juce::String(errbuf) + 
+                                " (error code: " + juce::String(ret) + ")");
+        return false;
+    }
+    
+    if (ret == AVERROR(EAGAIN))
+    {
+        juce::Logger::writeToLog("AudioDecoder: Decoder busy (EAGAIN), trying to receive frames first");
+    }
+    
+    // Receive decoded frames
+    AVFrame* frame = av_frame_alloc();
+    if (!frame)
+    {
+        return false;
+    }
+    
+    bool success = false;
+    while (true)
+    {
+        ret = avcodec_receive_frame(codecContext_, frame);
+        
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+        {
+            // No more frames available
+            break;
+        }
+        else if (ret < 0)
+        {
+            char errbuf[128];
+            av_strerror(ret, errbuf, sizeof(errbuf));
+            juce::Logger::writeToLog("Error receiving frame from decoder: " + juce::String(errbuf));
+            break;
+        }
+        
+        // Process the decoded frame
+        if (processFrame(frame))
+        {
+            success = true;
+        }
+        else
+        {
+            juce::Logger::writeToLog("AudioDecoder: Failed to process decoded frame");
+        }
+        
+        av_frame_unref(frame);
+    }
+    
+    av_frame_free(&frame);
+    return success;
 }
 
 bool AudioDecoder::processFrame(AVFrame* frame)
 {
-    if (!frame)
-        return false;
-    
-    // Convert frame if needed
-    if (swrCtx)
+    if (!frame || !frame->data[0])
     {
-        return processFrameWithResampling(frame);
+        return false;
+    }
+    
+    // Calculate timestamp
+    double pts = calculatePTS(frame);
+    currentTimestamp_.store(pts);
+    
+    // Convert and write frame to audio buffer
+    return convertAndWriteFrame(frame);
+}
+
+bool AudioDecoder::convertAndWriteFrame(AVFrame* frame)
+{
+    if (!frame)
+    {
+        return false;
+    }
+    
+    int numSamples = frame->nb_samples;
+    int sourceChannels = frame->ch_layout.nb_channels;
+    int numChannels = targetChannels_;
+    
+    juce::Logger::writeToLog("AudioDecoder: Processing frame - " + juce::String(numSamples) + 
+                            " samples, Source channels: " + juce::String(sourceChannels) + 
+                            ", Target channels: " + juce::String(numChannels));
+    
+    // Create audio frame for the buffer
+    AudioFrame audioFrame;
+    audioFrame.numSamples = numSamples;
+    audioFrame.numChannels = numChannels;
+    audioFrame.sampleRate = targetSampleRate_;
+    audioFrame.timestamp = currentTimestamp_.load();
+    audioFrame.data = std::make_unique<float[]>(numSamples * numChannels);
+    
+    if (needsResampling_ && swrContext_)
+    {
+        // Resample the audio
+        uint8_t* outputData[1] = { reinterpret_cast<uint8_t*>(audioFrame.data.get()) };
+        int outputSamples = swr_convert(swrContext_,
+                                       outputData, numSamples,
+                                       const_cast<const uint8_t**>(frame->data), frame->nb_samples);
+        
+        if (outputSamples < 0)
+        {
+            juce::Logger::writeToLog("Error resampling audio");
+            return false;
+        }
+        
+        audioFrame.numSamples = outputSamples;
     }
     else
     {
-        return processFrameDirect(frame);
-    }
-}
-
-bool AudioDecoder::processFrameDirect(AVFrame* frame)
-{
-    // Direct copy - frame format matches output format
-    int numSamples = frame->nb_samples;
-    int numChannels = frame->ch_layout.nb_channels;
-    
-    // Allocate temporary buffer
-    std::vector<float> tempBuffer(numSamples * numChannels);
-    
-    // Copy and convert to float if needed
-    if (frame->format == AV_SAMPLE_FMT_FLT)
-    {
-        // Planar float
-        for (int ch = 0; ch < numChannels; ++ch)
+        // Direct copy if no resampling needed
+        if (frame->format == AV_SAMPLE_FMT_FLT || frame->format == AV_SAMPLE_FMT_FLTP)
         {
-            const float* channelData = reinterpret_cast<const float*>(frame->data[ch]);
-            for (int i = 0; i < numSamples; ++i)
+            // Float format - can copy directly or deinterleave
+            if (frame->format == AV_SAMPLE_FMT_FLT)
             {
-                tempBuffer[i * numChannels + ch] = channelData[i];
+                // Interleaved float - handle channel mapping
+                if (sourceChannels == numChannels)
+                {
+                    // Direct copy if channel counts match
+                    memcpy(audioFrame.data.get(), frame->data[0], numSamples * sourceChannels * sizeof(float));
+                }
+                else
+                {
+                    // Channel conversion needed
+                    float* input = reinterpret_cast<float*>(frame->data[0]);
+                    float* output = audioFrame.data.get();
+                    for (int sample = 0; sample < numSamples; ++sample)
+                    {
+                        for (int channel = 0; channel < numChannels; ++channel)
+                        {
+                            if (channel < sourceChannels)
+                            {
+                                output[sample * numChannels + channel] = input[sample * sourceChannels + channel];
+                            }
+                            else
+                            {
+                                // Duplicate last channel or set to zero
+                                output[sample * numChannels + channel] = (sourceChannels > 0) ? 
+                                    input[sample * sourceChannels + (sourceChannels - 1)] : 0.0f;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Planar float - need to interleave
+                float* output = audioFrame.data.get();
+                for (int sample = 0; sample < numSamples; ++sample)
+                {
+                    for (int channel = 0; channel < numChannels; ++channel)
+                    {
+                        if (channel < sourceChannels)
+                        {
+                            float* channelData = reinterpret_cast<float*>(frame->data[channel]);
+                            output[sample * numChannels + channel] = channelData[sample];
+                        }
+                        else
+                        {
+                            // Duplicate last channel or set to zero
+                            if (sourceChannels > 0)
+                            {
+                                float* lastChannelData = reinterpret_cast<float*>(frame->data[sourceChannels - 1]);
+                                output[sample * numChannels + channel] = lastChannelData[sample];
+                            }
+                            else
+                            {
+                                output[sample * numChannels + channel] = 0.0f;
+                            }
+                        }
+                    }
+                }
             }
         }
-    }
-    else if (frame->format == AV_SAMPLE_FMT_FLTP)
-    {
-        // Packed float - direct copy
-        std::memcpy(tempBuffer.data(), frame->data[0], numSamples * numChannels * sizeof(float));
-    }
-    else
-    {
-        // Other formats - this shouldn't happen if resampler is working correctly
-        if (config.enableLogging)
-            std::cerr << "AudioDecoder: Unexpected audio format in direct processing" << std::endl;
-        return false;
+        else
+        {
+            // Other formats - would need conversion
+            juce::Logger::writeToLog("Unsupported audio format: " + juce::String(frame->format));
+            return false;
+        }
     }
     
-    // Push to buffer
-    return audioBuffer->push(tempBuffer.data(), numSamples);
-}
-
-bool AudioDecoder::processFrameWithResampling(AVFrame* frame)
-{
-    // Calculate output samples
-    int outputSamples = swr_get_out_samples(swrCtx.get(), frame->nb_samples);
-    if (outputSamples <= 0)
-        return true; // Nothing to output
-    
-    // Allocate output buffer
-    std::vector<float> outputBuffer(outputSamples * outputChannels);
-    uint8_t* outputData[1] = { reinterpret_cast<uint8_t*>(outputBuffer.data()) };
-    
-    // Convert
-    int convertedSamples = swr_convert(swrCtx.get(), outputData, outputSamples,
-                                     const_cast<const uint8_t**>(frame->data), frame->nb_samples);
-    
-    if (convertedSamples < 0)
+    // Apply gain if needed
+    double gainValue = gain_.load();
+    if (gainValue != 1.0)
     {
-        if (config.enableLogging)
-            std::cerr << "AudioDecoder: Error in resampling: " << convertedSamples << std::endl;
-        return false;
-    }
-    
-    if (convertedSamples == 0)
-        return true; // Nothing converted
-    
-    // Push to buffer
-    return audioBuffer->push(outputBuffer.data(), convertedSamples);
-}
-
-void AudioDecoder::handleSeek()
-{
-    // Seek in format context
-    int64_t seekTarget = static_cast<int64_t>(seekTime / timeBase);
-    
-    if (av_seek_frame(formatCtx, streamIndex, seekTarget, AVSEEK_FLAG_BACKWARD) < 0)
-    {
-        if (config.enableLogging)
-            std::cerr << "AudioDecoder: Seek failed" << std::endl;
-        return;
-    }
-    
-    // Flush codec buffers
-    avcodec_flush_buffers(codecCtx.get());
-    
-    // Clear audio buffer
-    audioBuffer->clear();
-    
-    // Update current time
-    currentTime = seekTime;
-}
-
-void AudioDecoder::flushDecoder()
-{
-    // Send NULL packet to flush
-    avcodec_send_packet(codecCtx.get(), nullptr);
-    
-    AVFramePtr frame(av_frame_alloc());
-    if (!frame)
-        return;
-    
-    // Receive remaining frames
-    while (true)
-    {
-        int ret = avcodec_receive_frame(codecCtx.get(), frame.get());
-        if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN))
-            break;
+        float gain = static_cast<float>(gainValue);
+        float* data = audioFrame.data.get();
+        int totalSamples = audioFrame.numSamples * audioFrame.numChannels;
         
-        if (ret < 0)
-            break;
-        
-        processFrame(frame.get());
-        av_frame_unref(frame.get());
+        for (int i = 0; i < totalSamples; ++i)
+        {
+            data[i] *= gain;
+        }
     }
+    
+    // Push to audio buffer
+    bool success = audioBuffer_.push(std::move(audioFrame));
+    if (!success)
+    {
+        juce::Logger::writeToLog("AudioDecoder: Failed to push frame to audio buffer (buffer full?)");
+    }
+    return success;
 }
 
-} // namespace cb 
+void AudioDecoder::performSeek()
+{
+}
+
+void AudioDecoder::handleEndOfStream()
+{
+}
+
+void AudioDecoder::updateStats()
+{
+}
+
+void AudioDecoder::setError(const juce::String& error)
+{
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    lastError_ = error;
+    juce::Logger::writeToLog("AudioDecoder Error: " + error);
+}
+
+double AudioDecoder::calculatePTS(AVFrame* frame) const
+{
+    if (!frame || !audioStream_)
+    {
+        return 0.0;
+    }
+    
+    // Use frame's best_effort_timestamp if available
+    int64_t pts = frame->best_effort_timestamp;
+    if (pts == AV_NOPTS_VALUE)
+    {
+        pts = frame->pts;
+    }
+    if (pts == AV_NOPTS_VALUE)
+    {
+        pts = frame->pkt_dts;
+    }
+    
+    if (pts != AV_NOPTS_VALUE)
+    {
+        return pts * av_q2d(audioStream_->time_base);
+    }
+    
+    return 0.0;
+}
+
+void AudioDecoder::applyGain(float* audioData, size_t numSamples, double gainValue) const
+{
+    // TODO: Implement gain application
+}
+
+bool AudioDecoder::needsFormatConversion(AVFrame* frame) const
+{
+    return false;
+}
+
+size_t AudioDecoder::getOptimalBufferSize() const
+{
+    return 0;
+}
+
+void AudioDecoder::cleanup()
+{
+}
+
+} 

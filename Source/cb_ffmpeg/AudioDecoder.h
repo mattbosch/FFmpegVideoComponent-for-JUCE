@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MediaReaderTypes.h"
+#include "MediaReaderConfig.h"
 #include "AudioBuffer.h"
 #include <thread>
 #include <atomic>
@@ -87,7 +88,7 @@ public:
     /**
      * Get decoder statistics
      */
-    DecoderStats getStats() const { return stats_; }
+    DecoderStats::Snapshot getStats() const { return stats_.getSnapshot(); }
     
     /**
      * Reset statistics
@@ -129,9 +130,9 @@ private:
     StreamInfo streamInfo_;
     
     // FFmpeg resources
-    FFmpegRAII::FormatContextPtr formatContext_;
-    FFmpegRAII::CodecContextPtr codecContext_;
-    FFmpegRAII::SwrContextPtr swrContext_;
+    AVFormatContext* formatContext_{nullptr}; // Not owned by this class
+    AVCodecContext* codecContext_{nullptr};
+    SwrContext* swrContext_{nullptr};
     AVStream* audioStream_{nullptr};
     int streamIndex_{-1};
     

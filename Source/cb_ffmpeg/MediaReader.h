@@ -4,11 +4,20 @@
 #include "MediaReaderTypes.h"
 #include "AudioBuffer.h"
 #include "VideoBuffer.h"
+#include "AudioDecoder.h"
+#include "MediaAudioSource.h"
 #include <memory>
 #include <thread>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
+}
 
 namespace cb_ffmpeg {
 
@@ -343,22 +352,18 @@ private:
     std::condition_variable stateCondition_;
     std::atomic<bool> shouldStop_{false};
     
-    // Core components
-    std::unique_ptr<FormatDetector> formatDetector_;
-    std::unique_ptr<AudioDecoder> audioDecoder_;
-    std::unique_ptr<VideoDecoder> videoDecoder_;
-    std::unique_ptr<ImageLoader> imageLoader_;
-    std::unique_ptr<SyncManager> syncManager_;
-    std::unique_ptr<TransportController> transportController_;
-    
-    // Buffers
+    // FFmpeg context
+    AVFormatContext* formatContext_{nullptr};
+
+    // Core components (simplified for now)
+    // TODO: Re-implement internal components when full implementations are ready
     std::unique_ptr<AudioBuffer> audioBuffer_;
-    std::unique_ptr<VideoBuffer> videoBuffer_;
-    std::unique_ptr<VideoFramePool> framePool_;
+    std::unique_ptr<AudioDecoder> audioDecoder_;
+    std::unique_ptr<MediaAudioSource> mediaAudioSource_;
     
-    // JUCE integration
-    std::unique_ptr<juce::AudioSource> audioSource_;
-    std::unique_ptr<juce::Component> videoComponent_;
+    // JUCE integration (simplified)
+    juce::AudioSource* audioSource_{nullptr};
+    juce::Component* videoComponent_{nullptr};
     
     // External interfaces
     ExternalSyncInterface* externalSync_{nullptr};

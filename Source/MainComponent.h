@@ -1,26 +1,25 @@
 #pragma once
 
-#include <juce_core/juce_core.h>
-#include <juce_audio_basics/juce_audio_basics.h>
-#include <juce_audio_devices/juce_audio_devices.h>
-#include <juce_audio_formats/juce_audio_formats.h>
-#include <juce_audio_utils/juce_audio_utils.h>
-#include <juce_graphics/juce_graphics.h>
-#include <juce_gui_basics/juce_gui_basics.h>
-#include <juce_gui_extra/juce_gui_extra.h>
-#include "cb_ffmpeg/cb_ffmpeg.h"
+#include "JuceHeader.h"
+#include "PlayerComponent.h"
 
 //==============================================================================
 /*
-    Modern MainComponent using the new cb_ffmpeg::MediaReader architecture
-    Supports universal media playback (audio, video, images) with thread-safe
-    asynchronous decoding and professional-grade performance.
+    Universal Media Player using cb_ffmpeg::MediaReader
+    
+    A comprehensive media player that demonstrates all features of the new
+    cb_ffmpeg architecture including:
+    - Universal media format support (audio, video, images)
+    - Hardware-accelerated video decoding
+    - Thread-safe asynchronous playback
+    - Real-time audio/video synchronization
+    - Professional transport controls
 */
 class MainComponent : public juce::Component,
-                     public juce::AudioSource,
                      public juce::Timer,
                      public juce::Button::Listener,
-                     public juce::Slider::Listener
+                     public juce::Slider::Listener,
+                     public juce::FileDragAndDropTarget
 {
 public:
     //==============================================================================
@@ -32,11 +31,6 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     
-    // juce::AudioSource
-    void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
-    void releaseResources() override;
-    void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) override;
-    
     // juce::Timer (for UI updates)
     void timerCallback() override;
     
@@ -45,46 +39,68 @@ public:
     
     // juce::Slider::Listener
     void sliderValueChanged(juce::Slider* slider) override;
+    void sliderDragStarted(juce::Slider* slider) override;
+    void sliderDragEnded(juce::Slider* slider) override;
+    
+    // juce::FileDragAndDropTarget
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void fileDragEnter(const juce::StringArray& files, int x, int y) override;
+    void fileDragExit(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int x, int y) override;
+    
+    // Public interface for external controls
+    void openFile();
 
 private:
     //==============================================================================
     // Media System
-    std::unique_ptr<cb_ffmpeg::MediaReader> mediaReader_;
-    cb_ffmpeg::MediaReaderConfig config_;
+    juce::AudioDeviceManager audioDeviceManager_;
+    PlayerComponent playerComponent;
+
+    // UI Layout Groups
+    juce::GroupComponent transportGroup_{"", "Transport Controls"};
+    juce::GroupComponent configGroup_{"", "Configuration"};
+    juce::GroupComponent infoGroup_{"", "Media Information"};
     
-    // UI Components
+    // Transport Controls
     juce::TextButton openButton_{"Open Media File"};
     juce::TextButton playPauseButton_{"Play"};
     juce::TextButton stopButton_{"Stop"};
-    
-    juce::Slider positionSlider_;
-    juce::Label positionLabel_{"Position", "00:00 / 00:00"};
-    
-    juce::Slider volumeSlider_;
-    juce::Label volumeLabel_{"Volume", "Volume"};
-    
     juce::ToggleButton loopButton_{"Loop"};
+    
+    // Position and Volume Controls
+    juce::Slider positionSlider_;
+    juce::Label positionLabel_{"", "00:00 / 00:00"};
+    juce::Slider volumeSlider_;
+    juce::Label volumeLabel_{"", "Volume"};
     juce::ToggleButton muteButton_{"Mute"};
     
-    // Video display area
-    std::unique_ptr<juce::Component> videoDisplay_;
+    // Configuration Controls
+    juce::ComboBox configPresetBox_;
+    juce::ToggleButton hardwareDecodingButton_{"Hardware Decoding"};
+    juce::ToggleButton debugLoggingButton_{"Debug Logging"};
+    juce::Slider audioBufferSlider_;
+    juce::Label audioBufferLabel_{"", "Audio Buffer (ms)"};
     
-    // State
-    bool isMediaLoaded_{false};
-    bool isPlaying_{false};
+    // Information Display
+    juce::TextEditor infoDisplay_;
+    
+    // State Management
     bool isDraggingPosition_{false};
-    double currentTime_{0.0};
-    double duration_{0.0};
+    bool isDragHover_{false};
+    juce::String currentFilename_;
     
-    // Helper methods
-    void openMediaFile();
-    void togglePlayPause();
-    void stopPlayback();
+    //==============================================================================
+    // Helper Methods
+    void initializeAudio();
+    void shutdownAudio();
+    void setupUI();
+    void loadMediaFile(const juce::File& file);
     void updatePositionDisplay();
     void updatePlayPauseButton();
-    void handleMediaStateChange();
-    void setupUI();
+    void updateMediaInfo();
     void formatTime(double seconds, juce::String& timeString);
+    bool isMediaFileSupported(const juce::File& file);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };

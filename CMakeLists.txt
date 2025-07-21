@@ -23,10 +23,70 @@ endif()
 if(PROJECT_IS_TOP_LEVEL)
     message(STATUS "No parent project found, requiring JUCE")
     find_package(JUCE REQUIRED)
-    # TODO: add the demo project in Source/ dir
+    
+    juce_add_gui_app(FFmpegVideoComponent)
+
+    target_sources(FFmpegVideoComponent PRIVATE
+        Source/Main.cpp
+        Source/MainComponent.cpp
+        Source/PlayerComponent.cpp
+        Source/TransportComponent.cpp
+        juce_ffmpeg.cpp
+    )
+
+    target_include_directories(FFmpegVideoComponent PRIVATE ./ JuceLibraryCode)
+
+    target_compile_definitions(FFmpegVideoComponent PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1)
+
+    target_link_libraries(FFmpegVideoComponent PRIVATE 
+        ffmpeg::ffmpeg
+
+        # System frameworks for FFmpeg/VideoToolbox
+        "-framework VideoToolbox"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
+        "-framework CoreFoundation"
+        "-framework Security"
+        "iconv"
+
+        # JUCE modules
+        juce::juce_core
+        juce::juce_events
+        juce::juce_graphics
+        juce::juce_data_structures
+        juce::juce_gui_basics
+        juce::juce_gui_extra
+        juce::juce_audio_basics
+        juce::juce_audio_devices
+        juce::juce_audio_formats
+        juce::juce_audio_processors
+        juce::juce_audio_utils
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags
+    )
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+            add_custom_command(TARGET FFmpegVideoComponent POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Running post-build script for arm64"
+                COMMAND /bin/sh ${CMAKE_SOURCE_DIR}/Scripts/post_build_osx_arm.sh ${CMAKE_BINARY_DIR}/FFmpegVideoComponent_artefacts
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/FFmpegVideoComponent_artefacts
+            )
+        else()
+            add_custom_command(TARGET FFmpegVideoComponent POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Running post-build script for x86_64"
+                COMMAND /bin/sh ${CMAKE_SOURCE_DIR}/Scripts/post_build_osx_x86_64.sh ${CMAKE_BINARY_DIR}/FFmpegVideoComponent_artefacts
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/FFmpegVideoComponent_artefacts
+            )
+        endif()
+    endif()
 endif()
 
-juce_add_module("${CMAKE_CURRENT_LIST_DIR}" ALIAS_NAMESPACE juce_ffmpeg)
+# The rest of this file is for packaging the module, which we can ignore for now
+# while we get the application to build.
+return()
+juce_add_module("${CMAKE_CURRENT_LIST_DIR}")
 
 target_compile_definitions(juce_ffmpeg INTERFACE 
                 JUCE_MODAL_LOOPS_PERMITTED=1 

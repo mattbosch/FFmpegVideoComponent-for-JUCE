@@ -1,5 +1,7 @@
 #pragma once
 
+#include "JuceHeader.h"
+
 /**
  * CB FFmpeg Universal Media Reader Module
  * 
@@ -39,8 +41,8 @@
  */
 
 // Core components
-#include "MediaReaderConfig.h"
 #include "MediaReaderTypes.h"
+#include "MediaReaderConfig.h"
 #include "MediaReader.h"
 
 // Buffer system

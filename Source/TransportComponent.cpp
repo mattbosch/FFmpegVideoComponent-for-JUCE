@@ -1,236 +1,300 @@
 #include "TransportComponent.h"
-
 #include "MainComponent.h"
-#include "cb_ffmpeg/FFmpegVideoComponent.h"
-#include "cb_strings/StringHelper.h"
 
-
-
+//==============================================================================
 TransportComponent::TransportComponent()
-: openVideoButton("Open...")
-, playPauseButton("Play/Pause")
-, speedNormalButton("normal speed")
-, speedFasterButton("+")
-, speedSlowerButton("-")
-, positionSlider ("PositionSlider")
-, positionLabel ("transportPositionLabel")
 {
-    setName("TransportComponent");
+    addAndMakeVisible(openVideoButton);
+    addAndMakeVisible(playPauseButton);
+    addAndMakeVisible(speedNormalButton);
+    addAndMakeVisible(speedFasterButton);
+    addAndMakeVisible(speedSlowerButton);
+    addAndMakeVisible(positionSlider);
+    addAndMakeVisible(positionLabel);
     
-    addMouseListener(this, true);
+    // Configure buttons
+    openVideoButton.setButtonText("Open");
+    playPauseButton.setButtonText("Play");
+    speedNormalButton.setButtonText("1x");
+    speedFasterButton.setButtonText("2x");
+    speedSlowerButton.setButtonText("0.5x");
     
-    addAndMakeVisible(&openVideoButton);
-    openVideoButton.setEnabled(true);
-    
-    addAndMakeVisible(&playPauseButton);
-    playPauseButton.setEnabled(true);
-    
-    addAndMakeVisible(&speedNormalButton);
-    speedNormalButton.setEnabled(true);
-    addAndMakeVisible(&speedSlowerButton);
-    speedSlowerButton.setEnabled(true);
-    addAndMakeVisible(&speedFasterButton);
-    speedFasterButton.setEnabled(true);
-    
+    // Configure position controls
     positionSlider.setRange(0.0, 1.0);
-    positionSlider.setName("PositionSlider");
-    positionSlider.setSliderStyle(juce::Slider::LinearHorizontal);
-    positionSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 80, 80);//, true, 80, 80);
+    positionSlider.setValue(0.0);
+    positionSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    positionSlider.setEnabled(false);
     
     positionLabel.setText("00:00 / 00:00", juce::dontSendNotification);
     positionLabel.setJustificationType(juce::Justification::centred);
     
-    addAndMakeVisible(&positionSlider);
-    addAndMakeVisible(&positionLabel);
-    
-    playPauseButton.addListener(this);
+    // Add listeners
     openVideoButton.addListener(this);
-    
+    playPauseButton.addListener(this);
     speedNormalButton.addListener(this);
-    speedSlowerButton.addListener(this);
     speedFasterButton.addListener(this);
-    
+    speedSlowerButton.addListener(this);
     positionSlider.addListener(this);
+    
+    // Initial state
+    playPauseButton.setEnabled(false);
+    speedNormalButton.setEnabled(false);
+    speedFasterButton.setEnabled(false);
+    speedSlowerButton.setEnabled(false);
+    
+    setSize(600, 80);
 }
 
 TransportComponent::~TransportComponent()
 {
-
+    stopTimer();
 }
 
-FFmpegVideoComponent* TransportComponent::getVideoComponent()
+void TransportComponent::paint(juce::Graphics& g)
 {
-    return videoScreenComponent;
-}
-
-void TransportComponent::setVideoComponent (FFmpegVideoComponent* videoScreenComp)
-{
-    videoScreenComponent = videoScreenComp;
-}
-
-
-MainComponent* TransportComponent::getMainComponent()
-{
-    return mainComponent;
-}
-
-void TransportComponent::setMainComponent (MainComponent* mainComp)
-{
-    mainComponent = mainComp;
-}
-
-
-void TransportComponent::startUpdateTimer()
-{
-    startTimer(updateInterval);
-}
-
-void TransportComponent::paint (juce::Graphics& g)
-{
-    juce::Rectangle<int> background = getLocalBounds();
-    juce::ColourGradient cg = juce::ColourGradient::horizontal(juce::Colours::grey.darker(1.0), 0.0, juce::Colours::grey.darker(20.0), getWidth());
-
-    g.setGradientFill(cg);
-    g.fillRect(background);
+    // Background
+    g.fillAll(getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId).darker(0.1f));
     
-    g.setFont (juce::Font (16.0f));
-    g.setColour (juce::Colours::whitesmoke.withAlpha(0.5f));
+    // Border
+    g.setColour(juce::Colours::grey);
+    g.drawRect(getLocalBounds(), 1);
 }
 
 void TransportComponent::resized()
 {
-    auto currentBounds = getLocalBounds();
-    int margin = 5;
-    auto buttonBounds = currentBounds;
+    auto bounds = getLocalBounds().reduced(10);
     
-    buttonBounds.reduce(margin, margin);
+    // Top row: buttons
+    auto buttonRow = bounds.removeFromTop(30);
+    openVideoButton.setBounds(buttonRow.removeFromLeft(80));
+    buttonRow.removeFromLeft(10);
     
-    //place components from Left
-    buttonBounds.removeFromLeft(margin);
+    playPauseButton.setBounds(buttonRow.removeFromLeft(60));
+    buttonRow.removeFromLeft(10);
     
-    openVideoButton.setVisible(true);
-    openVideoButton.setBounds( buttonBounds.removeFromLeft(80));
-    buttonBounds.removeFromLeft(margin);
+    speedSlowerButton.setBounds(buttonRow.removeFromLeft(40));
+    buttonRow.removeFromLeft(5);
+    speedNormalButton.setBounds(buttonRow.removeFromLeft(40));
+    buttonRow.removeFromLeft(5);
+    speedFasterButton.setBounds(buttonRow.removeFromLeft(40));
     
-    playPauseButton.setVisible(true);
-    playPauseButton.setBounds( buttonBounds.removeFromLeft(80));
-    buttonBounds.removeFromLeft(margin);
+    bounds.removeFromTop(10);
     
-    speedSlowerButton.setVisible(true);
-    speedSlowerButton.setBounds( buttonBounds.removeFromLeft(40));
-    buttonBounds.removeFromLeft(margin);
-    
-    speedNormalButton.setVisible(true);
-    speedNormalButton.setBounds( buttonBounds.removeFromLeft(80));
-    buttonBounds.removeFromLeft(margin);
-    
-    speedFasterButton.setVisible(true);
-    speedFasterButton.setBounds( buttonBounds.removeFromLeft(40));
-    buttonBounds.removeFromLeft(margin);
-
-    buttonBounds.removeFromRight(margin);
-    positionLabel.setBounds(buttonBounds.removeFromRight(80));
-    buttonBounds.removeFromRight(margin);
-
-    positionSlider.setBounds(buttonBounds);
+    // Bottom row: position controls
+    auto positionRow = bounds.removeFromTop(30);
+    positionLabel.setBounds(positionRow.removeFromRight(120));
+    positionRow.removeFromRight(10);
+    positionSlider.setBounds(positionRow);
 }
 
-void TransportComponent::buttonClicked (juce::Button* button)
+void TransportComponent::buttonClicked(juce::Button* button)
 {
-    if (button == &playPauseButton )
-    {
-        startOrPause();
-    }
-    else if (button == &openVideoButton )
-    {
-        juce::FileChooser chooser ("Open Video File");
-        if (chooser.browseForFileToOpen())
-        {
-            juce::File video = chooser.getResult();
-            videoScreenComponent->load(video);
+    if (button == &openVideoButton) {
+        if (mainComponent_) {
+            // Trigger file open in main component
+            mainComponent_->openFile();
         }
     }
-    else if (button == &speedNormalButton)
-    {
-        DBG("playback speed: 1.0");
-        videoScreenComponent->setPlaySpeed(1.0);
+    else if (button == &playPauseButton) {
+        startOrPause();
     }
-    else if (button == &speedSlowerButton)
-    {
-        double newSpeed = videoScreenComponent->getPlaySpeed() - 0.2;
-        DBG("playback speed slower: " + juce::String(newSpeed));
-        videoScreenComponent->setPlaySpeed(newSpeed);
+    else if (button == &speedSlowerButton) {
+        setPlaybackRate(0.5);
     }
-    else if (button == &speedFasterButton)
-    {
-        double newSpeed = videoScreenComponent->getPlaySpeed() + 0.2;
-        DBG("playback speed faster: " + juce::String(newSpeed));
-        videoScreenComponent->setPlaySpeed(newSpeed);
+    else if (button == &speedNormalButton) {
+        setPlaybackRate(1.0);
+    }
+    else if (button == &speedFasterButton) {
+        setPlaybackRate(2.0);
+    }
+}
+
+void TransportComponent::sliderValueChanged(juce::Slider* slider)
+{
+    if (slider == &positionSlider && isDraggingPosition_) {
+        if (mediaReader_ && duration_ > 0.0) {
+            double newPosition = positionSlider.getValue() * duration_;
+            mediaReader_->seek(newPosition);
+            currentTime_ = newPosition;
+            updatePositionDisplay();
+        }
+    }
+}
+
+void TransportComponent::sliderDragStarted(juce::Slider* slider)
+{
+    if (slider == &positionSlider) {
+        isDraggingPosition_ = true;
+    }
+}
+
+void TransportComponent::sliderDragEnded(juce::Slider* slider)
+{
+    if (slider == &positionSlider) {
+        isDraggingPosition_ = false;
     }
 }
 
 void TransportComponent::timerCallback()
 {
-    repaint();
+    if (!mediaReader_) {
+        return;
+    }
+    
+    // Update current time
+    currentTime_ = mediaReader_->getCurrentPosition();
+    duration_ = mediaReader_->getDuration();
+    
+    // Update position slider (but not if user is dragging it)
+    if (!isDraggingPosition_ && duration_ > 0.0) {
+        double progress = currentTime_ / duration_;
+        positionSlider.setValue(progress, juce::dontSendNotification);
+    }
+    
+    updatePositionDisplay();
+    
+    // Update button states based on MediaReader state
+    bool isPlaying = mediaReader_->isPlaying();
+    playPauseButton.setButtonText(isPlaying ? "Pause" : "Play");
+    
+    // Enable/disable controls based on media loaded state
+    bool hasMedia = mediaReader_->isLoaded();
+    playPauseButton.setEnabled(hasMedia);
+    speedNormalButton.setEnabled(hasMedia);
+    speedFasterButton.setEnabled(hasMedia);
+    speedSlowerButton.setEnabled(hasMedia);
+    positionSlider.setEnabled(hasMedia);
+    
+    // Call legacy listener method for compatibility
+    positionSecondsChanged(currentTime_);
 }
 
-void TransportComponent::sliderValueChanged (juce::Slider* slider)
+void TransportComponent::setMediaReader(cb_ffmpeg::MediaReader* reader)
 {
-    if (slider == &positionSlider)
-    {
-        videoScreenComponent->setPlayPosition(slider->getValue() * videoScreenComponent->getVideoDuration());
+    mediaReader_ = reader;
+    
+    if (mediaReader_) {
+        duration_ = mediaReader_->getDuration();
+        currentTime_ = mediaReader_->getCurrentPosition();
+        
+        // Reset position slider
+        positionSlider.setRange(0.0, 1.0);
+        positionSlider.setValue(0.0);
+        
+        updatePositionDisplay();
+        updatePlayPauseButton();
     }
 }
 
-//void TransportComponent::sliderDragStarted ( juce::Slider* slider)
-//{
-//#if JUCE_MAC
-//#pragma unused(slider)
-//#endif
-//}
-
-//void TransportComponent::sliderDragEnded ( juce::Slider* slider)
-//{
-//#if JUCE_MAC
-//#pragma unused(slider)
-//#endif
-//}
+void TransportComponent::startUpdateTimer()
+{
+    startTimerHz(static_cast<int>(1000.0 / updateInterval));
+}
 
 void TransportComponent::startOrPause()
 {
-    if (videoScreenComponent->isVideoOpen())
-    {
-        if ( videoScreenComponent->isPlaying() )
-        {
-            videoScreenComponent->stop();
-        }
-        else
-        {
-            videoScreenComponent->play();
-        }
-        resized();
+    if (!mediaReader_) {
+        return;
+    }
+    
+    if (mediaReader_->isPlaying()) {
+        mediaReader_->pause();
+        pausedManually = true;
+    } else {
+        mediaReader_->play();
+        pausedManually = false;
+    }
+    
+    updatePlayPauseButton();
+}
+
+void TransportComponent::stop()
+{
+    if (mediaReader_) {
+        mediaReader_->stop();
+        currentTime_ = 0.0;
+        positionSlider.setValue(0.0, juce::dontSendNotification);
+        updatePlayPauseButton();
+        updatePositionDisplay();
     }
 }
 
-//void TransportComponent::stop()
-//{
-//
-//}
-//
-//void TransportComponent::play()
-//{
-//
-//}
-
-void TransportComponent::positionSecondsChanged (const double pts)
+void TransportComponent::play()
 {
-    //update label and slider
-    auto lambda = [pts, this]()
-    {
-        positionLabel.setText(StringHelper::convertSecondsToTimeString(pts, false), juce::dontSendNotification);
-        positionSlider.setValue( pts / videoScreenComponent->getVideoDuration(), juce::dontSendNotification);
-    };
-    juce::MessageManager::callAsync(lambda);
+    if (mediaReader_) {
+        mediaReader_->play();
+        pausedManually = false;
+        updatePlayPauseButton();
+    }
+}
+
+void TransportComponent::setTime(double time)
+{
+    if (mediaReader_) {
+        mediaReader_->seek(time);
+        currentTime_ = time;
+        
+        if (duration_ > 0.0) {
+            double progress = time / duration_;
+            positionSlider.setValue(progress, juce::dontSendNotification);
+        }
+        
+        updatePositionDisplay();
+    }
+}
+
+void TransportComponent::setPlaybackRate(double rate)
+{
+    playbackRate_ = rate;
+    
+    if (mediaReader_) {
+        mediaReader_->setPlaybackRate(rate);
+    }
+    
+    // Update button states to show current rate
+    speedSlowerButton.setToggleState(rate == 0.5, juce::dontSendNotification);
+    speedNormalButton.setToggleState(rate == 1.0, juce::dontSendNotification);
+    speedFasterButton.setToggleState(rate == 2.0, juce::dontSendNotification);
+}
+
+void TransportComponent::positionSecondsChanged(const double pts)
+{
+    // Legacy callback method - implementation can be empty
+    // or forward to other components if needed
+    juce::ignoreUnused(pts);
+}
+
+void TransportComponent::updatePositionDisplay()
+{
+    juce::String currentTimeStr, durationStr;
+    formatTime(currentTime_, currentTimeStr);
+    formatTime(duration_, durationStr);
+    
+    positionLabel.setText(currentTimeStr + " / " + durationStr, juce::dontSendNotification);
+}
+
+void TransportComponent::updatePlayPauseButton()
+{
+    if (mediaReader_) {
+        bool isPlaying = mediaReader_->isPlaying();
+        playPauseButton.setButtonText(isPlaying ? "Pause" : "Play");
+    } else {
+        playPauseButton.setButtonText("Play");
+    }
+}
+
+void TransportComponent::formatTime(double seconds, juce::String& timeString)
+{
+    int totalSeconds = static_cast<int>(seconds);
+    int hours = totalSeconds / 3600;
+    int minutes = (totalSeconds % 3600) / 60;
+    int secs = totalSeconds % 60;
+    
+    if (hours > 0) {
+        timeString = juce::String::formatted("%d:%02d:%02d", hours, minutes, secs);
+    } else {
+        timeString = juce::String::formatted("%02d:%02d", minutes, secs);
+    }
 }
 
 

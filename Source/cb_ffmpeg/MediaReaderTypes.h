@@ -1,13 +1,6 @@
 #pragma once
 
-#include <juce_core/juce_core.h>
-#include <juce_audio_basics/juce_audio_basics.h>
-#include <juce_audio_devices/juce_audio_devices.h>
-#include <juce_audio_formats/juce_audio_formats.h>
-#include <juce_audio_utils/juce_audio_utils.h>
-#include <juce_graphics/juce_graphics.h>
-#include <juce_gui_basics/juce_gui_basics.h>
-#include <juce_gui_extra/juce_gui_extra.h>
+#include "JuceHeader.h"
 #include <memory>
 #include <atomic>
 #include <chrono>
@@ -131,6 +124,7 @@ struct StreamInfo {
     int channels = 0;               // Number of audio channels
     SampleFormat sampleFormat = SampleFormat::Unknown;
     int bitsPerSample = 0;
+    int64_t bitRate = 0;            // Bit rate in bits per second
     
     // Video-specific properties
     int width = 0;                  // Video width
@@ -265,6 +259,32 @@ struct DecoderStats {
         averageDecodeTime = 0.0;
         currentBufferLevel = 0.0;
         syncOffset = 0.0;
+    }
+    
+    // Create a copyable snapshot of the stats
+    struct Snapshot {
+        uint64_t framesDecoded;
+        uint64_t framesDropped;
+        uint64_t bufferUnderruns;
+        uint64_t bufferOverruns;
+        double averageDecodeTime;
+        double currentBufferLevel;
+        double syncOffset;
+        
+        Snapshot() = default;
+        Snapshot(const DecoderStats& stats) :
+            framesDecoded(stats.framesDecoded.load()),
+            framesDropped(stats.framesDropped.load()),
+            bufferUnderruns(stats.bufferUnderruns.load()),
+            bufferOverruns(stats.bufferOverruns.load()),
+            averageDecodeTime(stats.averageDecodeTime.load()),
+            currentBufferLevel(stats.currentBufferLevel.load()),
+            syncOffset(stats.syncOffset.load())
+        {}
+    };
+    
+    Snapshot getSnapshot() const {
+        return Snapshot(*this);
     }
 };
 

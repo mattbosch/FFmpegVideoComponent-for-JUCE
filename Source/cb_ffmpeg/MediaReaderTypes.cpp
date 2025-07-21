@@ -365,7 +365,7 @@ StreamInfo extractStreamInfo(AVStream* stream) {
     // Type-specific information
     if (codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
         info.sampleRate = codecpar->sample_rate;
-        info.channels = codecpar->channels;
+        info.channels = codecpar->ch_layout.nb_channels;
         info.sampleFormat = convertAVSampleFormat(static_cast<AVSampleFormat>(codecpar->format));
         info.bitsPerSample = av_get_bits_per_sample(codecpar->codec_id);
         

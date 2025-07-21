@@ -39,10 +39,17 @@ void MediaAudioSource::prepareToPlay(int samplesPerBlockExpected, double sampleR
         if (needsResampling_) {
             resampleRatio_ = sampleRate / audioStream->sampleRate;
             
+            juce::Logger::writeToLog("MediaAudioSource: Sample rate conversion needed - File: " + 
+                                    juce::String(audioStream->sampleRate) + " Hz, Output: " + 
+                                    juce::String(sampleRate) + " Hz, Ratio: " + 
+                                    juce::String(resampleRatio_, 4));
+            
             // Reset interpolators
             for (int i = 0; i < outputChannels_; ++i) {
                 interpolators_[i].reset();
             }
+        } else {
+            juce::Logger::writeToLog("MediaAudioSource: No resampling needed - Sample rate: " + juce::String(sampleRate) + " Hz");
         }
         
         updateResamplingConfig();
@@ -66,23 +73,29 @@ void MediaAudioSource::releaseResources() {
 }
 
 void MediaAudioSource::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) {
+    juce::Logger::writeToLog("MediaAudioSource: getNextAudioBlock called - " + juce::String(bufferToFill.numSamples) + 
+                            " samples, buffer level: " + juce::String(audioBuffer_.getBufferLevel() * 100, 1) + "%");
+    
     if (!isPrepared_ || !enabled_.load()) {
+        juce::Logger::writeToLog("MediaAudioSource: Not prepared or not enabled");
         bufferToFill.clearActiveBufferRegion();
         return;
     }
     
     if (!hasAudioAvailable()) {
+        juce::Logger::writeToLog("MediaAudioSource: No audio available, triggering underrun");
         handleUnderrun();
         bufferToFill.clearActiveBufferRegion();
         return;
     }
     
     int samplesNeeded = bufferToFill.numSamples;
-    int channels = std::min(bufferToFill.buffer->getNumChannels(), outputChannels_);
     
-    if (needsResampling_) {
+    if (needsResampling_)
+    {
         // Fill temp buffer with source data
         int sourceSamplesNeeded = static_cast<int>(samplesNeeded / resampleRatio_) + 1;
+        const int channels = std::min(bufferToFill.buffer->getNumChannels(), outputChannels_);
         ensureBufferSizes(channels, sourceSamplesNeeded);
         
         int sourceSamplesFilled = fillFromAudioBuffer(tempBuffer_, 0, sourceSamplesNeeded);
@@ -104,13 +117,18 @@ void MediaAudioSource::getNextAudioBlock(const juce::AudioSourceChannelInfo& buf
             bufferToFill.clearActiveBufferRegion();
             return;
         }
-    } else {
+    }
+    else
+    {
         // Direct copy without resampling
         int samplesFilled = fillFromAudioBuffer(*bufferToFill.buffer, bufferToFill.startSample, samplesNeeded);
         
         // Clear any unfilled samples
-        if (samplesFilled < samplesNeeded) {
-            for (int ch = 0; ch < channels; ++ch) {
+        if (samplesFilled < samplesNeeded)
+        {
+            const int channels = std::min(bufferToFill.buffer->getNumChannels(), outputChannels_);
+            for (int ch = 0; ch < channels; ++ch)
+            {
                 bufferToFill.buffer->clear(ch, bufferToFill.startSample + samplesFilled,
                                          samplesNeeded - samplesFilled);
             }
@@ -186,15 +204,20 @@ int MediaAudioSource::fillFromAudioBuffer(juce::AudioBuffer<float>& output, int 
     while (totalSamplesFilled < numSamples) {
         // Get next frame if needed
         if (!hasActiveFrame_ || framePosition_ >= currentFrame_.numSamples) {
+            juce::Logger::writeToLog("MediaAudioSource: Need new frame, attempting pop from buffer...");
             if (!audioBuffer_.pop(currentFrame_)) {
                 // No more frames available
+                juce::Logger::writeToLog("MediaAudioSource: Failed to pop frame from buffer");
                 break;
             }
             
             if (currentFrame_.isEmpty()) {
+                juce::Logger::writeToLog("MediaAudioSource: Got empty frame, continuing...");
                 continue;
             }
             
+            juce::Logger::writeToLog("MediaAudioSource: Successfully got frame with " + juce::String(currentFrame_.numSamples) + 
+                                    " samples, " + juce::String(currentFrame_.numChannels) + " channels");
             hasActiveFrame_ = true;
             framePosition_ = 0;
         }

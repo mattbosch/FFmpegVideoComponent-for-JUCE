@@ -1,545 +1,361 @@
 #include "MediaReader.h"
-#include <iostream>
+#include "AudioDecoder.h"
+#include "VideoDecoder.h"
+#include "MediaAudioSource.h"
 
-namespace cb
+namespace cb_ffmpeg
 {
 
 MediaReader::MediaReader(const MediaReaderConfig& config)
-    : config(config)
-    , isInitialized(false)
-    , hasAudio(false)
-    , hasVideo(false)
-    , audioStreamIndex(-1)
-    , videoStreamIndex(-1)
-    , duration(0.0)
-    , currentTime(0.0)
-    , isPlaying(false)
-    , isPaused(false)
-    , hasReachedEnd(false)
+    : config_(config)
 {
-    // Initialize FFmpeg if not already done
-    if (!cb::isFFmpegInitialized())
-    {
-        cb::initializeFFmpeg();
-    }
 }
 
 MediaReader::~MediaReader()
 {
-    close();
+    unload();
 }
 
-bool MediaReader::open(const std::string& filename)
+bool MediaReader::loadFile(const juce::File& file)
 {
-    // Close any existing media
-    close();
-    
-    // Open format context
-    AVFormatContext* formatCtxRaw = nullptr;
-    if (avformat_open_input(&formatCtxRaw, filename.c_str(), nullptr, nullptr) < 0)
+    if (isLoaded())
     {
-        if (config.enableLogging)
-            std::cerr << "MediaReader: Could not open file: " << filename << std::endl;
-        return false;
+        unload();
     }
-    
-    formatCtx = AVFormatContextPtr(formatCtxRaw);
-    
-    // Find stream info
-    if (avformat_find_stream_info(formatCtx.get(), nullptr) < 0)
-    {
-        if (config.enableLogging)
-            std::cerr << "MediaReader: Could not find stream info" << std::endl;
-        formatCtx.reset();
-        return false;
-    }
-    
-    // Find streams
-    if (!findStreams())
-    {
-        if (config.enableLogging)
-            std::cerr << "MediaReader: No valid streams found" << std::endl;
-        formatCtx.reset();
-        return false;
-    }
-    
-    // Initialize components
-    if (!initializeComponents())
-    {
-        if (config.enableLogging)
-            std::cerr << "MediaReader: Failed to initialize components" << std::endl;
-        formatCtx.reset();
-        return false;
-    }
-    
-    // Calculate duration
-    calculateDuration();
-    
-    currentFilename = filename;
-    isInitialized = true;
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Successfully opened " << filename << std::endl;
-    
-    return true;
-}
 
-void MediaReader::close()
-{
-    // Stop playback
-    stop();
-    
-    // Reset state
-    isInitialized = false;
-    hasAudio = false;
-    hasVideo = false;
-    audioStreamIndex = -1;
-    videoStreamIndex = -1;
-    duration = 0.0;
-    currentTime = 0.0;
-    isPlaying = false;
-    isPaused = false;
-    hasReachedEnd = false;
-    
-    // Clean up components
-    audioDecoder.reset();
-    videoDecoder.reset();
-    audioBuffer.reset();
-    videoBuffer.reset();
-    audioSource.reset();
-    videoComponent.reset();
-    
-    // Close format context
-    formatCtx.reset();
-    
-    currentFilename.clear();
-}
-
-bool MediaReader::findStreams()
-{
-    if (!formatCtx)
-        return false;
-    
-    audioStreamIndex = av_find_best_stream(formatCtx.get(), AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
-    videoStreamIndex = av_find_best_stream(formatCtx.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-    
-    hasAudio = (audioStreamIndex >= 0);
-    hasVideo = (videoStreamIndex >= 0);
-    
-    return hasAudio || hasVideo;
-}
-
-bool MediaReader::initializeComponents()
-{
-    if (!formatCtx)
-        return false;
-    
-    // Initialize audio components
-    if (hasAudio)
+    // Check if FFmpeg is initialized
+    if (!isFFmpegInitialized())
     {
-        audioBuffer = std::make_shared<AudioBuffer>(config.audioConfig);
-        audioDecoder = std::make_unique<AudioDecoder>(audioBuffer, config);
-        audioSource = std::make_unique<MediaAudioSource>(audioBuffer, config);
-        
-        if (!audioDecoder->initialize(formatCtx.get(), audioStreamIndex))
+        setError("FFmpeg not initialized. Call cb_ffmpeg::initializeModule() first.");
+        return false;
+    }
+
+    // Basic file validation
+    if (!file.exists())
+    {
+        setError("File does not exist: " + file.getFullPathName());
+        return false;
+    }
+
+    if (!file.existsAsFile())
+    {
+        setError("Path is not a file: " + file.getFullPathName());
+        return false;
+    }
+
+    if (file.getSize() == 0)
+    {
+        setError("File is empty: " + file.getFullPathName());
+        return false;
+    }
+
+    // Log the file being opened for debugging
+    juce::Logger::writeToLog("Attempting to load file: " + file.getFullPathName());
+
+    // Open the media file
+    int ret = avformat_open_input(&formatContext_, file.getFullPathName().toRawUTF8(), nullptr, nullptr);
+    if (ret < 0)
+    {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        juce::Logger::writeToLog("FFmpeg error opening file: " + juce::String(errbuf));
+        setError("Could not open media file: " + juce::String(errbuf));
+        return false;
+    }
+
+    // Find stream information
+    ret = avformat_find_stream_info(formatContext_, nullptr);
+    if (ret < 0)
+    {
+        char errbuf[128];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        juce::Logger::writeToLog("FFmpeg error finding stream info: " + juce::String(errbuf));
+        setError("Could not find stream information: " + juce::String(errbuf));
+        avformat_close_input(&formatContext_);
+        return false;
+    }
+
+    // Populate MediaInfo
+    mediaInfo_.file = file;
+    mediaInfo_.duration = (double)formatContext_->duration / AV_TIME_BASE;
+    mediaInfo_.format = formatContext_->iformat->name;
+    mediaInfo_.type = MediaType::Unknown; // Will be determined below
+
+    // Log file info
+    juce::Logger::writeToLog("File loaded successfully. Format: " + mediaInfo_.format + 
+                            ", Duration: " + juce::String(mediaInfo_.duration) + " seconds");
+
+    for (unsigned int i = 0; i < formatContext_->nb_streams; ++i)
+    {
+        AVStream* stream = formatContext_->streams[i];
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && mediaInfo_.audioStreamIndex == -1)
         {
-            if (config.enableLogging)
-                std::cerr << "MediaReader: Failed to initialize audio decoder" << std::endl;
-            hasAudio = false;
-            audioDecoder.reset();
-            audioSource.reset();
-            audioBuffer.reset();
+            mediaInfo_.audioStreamIndex = i;
+            juce::Logger::writeToLog("Found audio stream at index " + juce::String(i));
+        }
+        else if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && mediaInfo_.videoStreamIndex == -1)
+        {
+            mediaInfo_.videoStreamIndex = i;
+            juce::Logger::writeToLog("Found video stream at index " + juce::String(i));
         }
     }
-    
-    // Initialize video components
-    if (hasVideo)
-    {
-        videoBuffer = std::make_shared<VideoBuffer>(config.videoConfig);
-        videoDecoder = std::make_unique<VideoDecoder>(videoBuffer, config);
-        videoComponent = std::make_unique<MediaVideoComponent>(videoBuffer, config);
-        
-        if (!videoDecoder->initialize(formatCtx.get(), videoStreamIndex))
-        {
-            if (config.enableLogging)
-                std::cerr << "MediaReader: Failed to initialize video decoder" << std::endl;
-            hasVideo = false;
-            videoDecoder.reset();
-            videoComponent.reset();
-            videoBuffer.reset();
-        }
-    }
-    
-    return hasAudio || hasVideo;
-}
 
-void MediaReader::calculateDuration()
-{
-    if (!formatCtx)
+    // Determine media type
+    if (mediaInfo_.audioStreamIndex >= 0 && mediaInfo_.videoStreamIndex >= 0)
+        mediaInfo_.type = MediaType::AudioVideo;
+    else if (mediaInfo_.audioStreamIndex >= 0)
+        mediaInfo_.type = MediaType::AudioOnly;
+    else if (mediaInfo_.videoStreamIndex >= 0)
+        mediaInfo_.type = MediaType::VideoOnly;
+
+    juce::Logger::writeToLog("Media type determined: " + 
+                            juce::String(mediaInfo_.hasAudio() ? "Audio " : "") +
+                            juce::String(mediaInfo_.hasVideo() ? "Video" : ""));
+
+    // Set up audio decoding pipeline if we have audio
+    if (mediaInfo_.hasAudio())
     {
-        duration = 0.0;
-        return;
-    }
-    
-    if (formatCtx->duration != AV_NOPTS_VALUE)
-    {
-        duration = formatCtx->duration / static_cast<double>(AV_TIME_BASE);
+        juce::Logger::writeToLog("MediaReader: Setting up audio decoding pipeline");
+        try {
+            // Create audio buffer
+            audioBuffer_ = std::make_unique<AudioBuffer>(config_.audioBufferSizeMs);
+            juce::Logger::writeToLog("MediaReader: AudioBuffer created");
+            
+            // Create audio decoder
+            audioDecoder_ = std::make_unique<AudioDecoder>(*audioBuffer_, config_);
+            juce::Logger::writeToLog("MediaReader: AudioDecoder created");
+            
+            // Initialize decoder with the format context and audio stream
+            if (audioDecoder_->initialize(formatContext_, mediaInfo_.audioStreamIndex))
+            {
+                juce::Logger::writeToLog("MediaReader: AudioDecoder initialized successfully");
+                
+                // Create media audio source
+                mediaAudioSource_ = std::make_unique<MediaAudioSource>(*audioBuffer_, mediaInfo_);
+                audioSource_ = mediaAudioSource_.get();
+                
+                juce::Logger::writeToLog("MediaReader: Audio decoding pipeline created successfully");
+            }
+            else
+            {
+                juce::Logger::writeToLog("MediaReader: Failed to initialize audio decoder");
+                audioDecoder_.reset();
+                audioBuffer_.reset();
+            }
+        }
+        catch (const std::exception& e)
+        {
+            juce::Logger::writeToLog("MediaReader: Exception creating audio pipeline: " + juce::String(e.what()));
+            audioDecoder_.reset();
+            audioBuffer_.reset();
+            audioSource_ = nullptr;
+        }
     }
     else
     {
-        // Try to estimate from streams
-        duration = 0.0;
-        for (unsigned int i = 0; i < formatCtx->nb_streams; ++i)
-        {
-            AVStream* stream = formatCtx->streams[i];
-            if (stream->duration != AV_NOPTS_VALUE)
-            {
-                double streamDuration = stream->duration * av_q2d(stream->time_base);
-                duration = std::max(duration, streamDuration);
-            }
-        }
+        juce::Logger::writeToLog("MediaReader: No audio stream found in media file");
     }
+
+    if (callback_)
+    {
+        callback_->onMediaLoaded(mediaInfo_);
+    }
+
+    return true;
+}
+
+bool MediaReader::loadFromMemory(const void* data, size_t size, const juce::String& formatHint)
+{
+    return false;
+}
+
+void MediaReader::unload()
+{
+    // Stop audio decoding if running
+    if (audioDecoder_)
+    {
+        audioDecoder_->stop();
+        audioDecoder_.reset();
+    }
+    
+    // Clean up audio components
+    audioSource_ = nullptr;
+    mediaAudioSource_.reset();
+    audioBuffer_.reset();
+    
+    if (formatContext_)
+    {
+        avformat_close_input(&formatContext_);
+        formatContext_ = nullptr;
+    }
+    mediaInfo_ = {};
 }
 
 void MediaReader::play()
 {
-    if (!isInitialized || isPlaying)
-        return;
+    juce::Logger::writeToLog("MediaReader::play() called");
     
-    isPlaying = true;
-    isPaused = false;
-    hasReachedEnd = false;
-    
-    // Start decoders
-    if (audioDecoder)
-        audioDecoder->start();
-    
-    if (videoDecoder)
-        videoDecoder->start();
-    
-    // Update components
-    if (audioSource)
-        audioSource->setPlaying(true);
-    
-    if (videoComponent)
-        videoComponent->setPlaying(true);
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Started playback" << std::endl;
+    if (audioDecoder_ && audioDecoder_->getState() != DecoderState::Destroyed)
+    {
+        juce::Logger::writeToLog("MediaReader: AudioDecoder exists, current state: " + juce::String(static_cast<int>(audioDecoder_->getState())));
+        
+        if (audioDecoder_->getState() == DecoderState::Uninitialized || 
+            audioDecoder_->getState() == DecoderState::Ready ||
+            audioDecoder_->getState() == DecoderState::EndOfStream)
+        {
+            juce::Logger::writeToLog("MediaReader: Starting audio decoder");
+            if (audioDecoder_->start())
+            {
+                setPlaybackState(PlaybackState::Playing);
+                if (callback_) callback_->onPlaybackStarted();
+                juce::Logger::writeToLog("MediaReader: Audio playback started successfully");
+            }
+            else
+            {
+                juce::Logger::writeToLog("MediaReader: Failed to start audio decoder");
+            }
+        }
+        else if (getPlaybackState() == PlaybackState::Paused)
+        {
+            setPlaybackState(PlaybackState::Playing);
+            if (callback_) callback_->onPlaybackStarted();
+            juce::Logger::writeToLog("MediaReader: Audio playback resumed");
+        }
+        else
+        {
+            juce::Logger::writeToLog("MediaReader: AudioDecoder in unexpected state: " + juce::String(static_cast<int>(audioDecoder_->getState())));
+        }
+    }
+    else
+    {
+        juce::Logger::writeToLog("MediaReader: No AudioDecoder available for playback");
+    }
 }
 
 void MediaReader::pause()
 {
-    if (!isInitialized || !isPlaying || isPaused)
-        return;
+    juce::Logger::writeToLog("MediaReader::pause() called");
     
-    isPaused = true;
-    
-    // Pause decoders
-    if (audioDecoder)
-        audioDecoder->pause();
-    
-    if (videoDecoder)
-        videoDecoder->pause();
-    
-    // Update components
-    if (audioSource)
-        audioSource->setPlaying(false);
-    
-    if (videoComponent)
-        videoComponent->setPlaying(false);
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Paused playback" << std::endl;
-}
-
-void MediaReader::resume()
-{
-    if (!isInitialized || !isPlaying || !isPaused)
-        return;
-    
-    isPaused = false;
-    
-    // Resume decoders
-    if (audioDecoder)
-        audioDecoder->resume();
-    
-    if (videoDecoder)
-        videoDecoder->resume();
-    
-    // Update components
-    if (audioSource)
-        audioSource->setPlaying(true);
-    
-    if (videoComponent)
-        videoComponent->setPlaying(true);
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Resumed playback" << std::endl;
+    if (audioDecoder_ && getPlaybackState() == PlaybackState::Playing)
+    {
+        setPlaybackState(PlaybackState::Paused);
+        if (callback_) callback_->onPlaybackPaused();
+        juce::Logger::writeToLog("MediaReader: Audio playback paused");
+    }
+    else
+    {
+        juce::Logger::writeToLog("MediaReader: Cannot pause - no decoder or not playing");
+    }
 }
 
 void MediaReader::stop()
 {
-    if (!isInitialized)
-        return;
-    
-    isPlaying = false;
-    isPaused = false;
-    hasReachedEnd = false;
-    
-    // Stop decoders
-    if (audioDecoder)
-        audioDecoder->stop();
-    
-    if (videoDecoder)
-        videoDecoder->stop();
-    
-    // Update components
-    if (audioSource)
-        audioSource->setPlaying(false);
-    
-    if (videoComponent)
+    if (audioDecoder_)
     {
-        videoComponent->setPlaying(false);
-        videoComponent->clearFrame();
+        audioDecoder_->stop();
+        setPlaybackState(PlaybackState::Stopped);
+        if (callback_) callback_->onPlaybackStopped();
+        juce::Logger::writeToLog("Audio playback stopped");
     }
-    
-    // Reset time
-    currentTime = 0.0;
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Stopped playback" << std::endl;
 }
 
-void MediaReader::seek(double timeInSeconds)
+void MediaReader::seek(double timeInSeconds, SeekMode mode)
 {
-    if (!isInitialized)
-        return;
-    
-    // Clamp time to valid range
-    timeInSeconds = std::max(0.0, std::min(timeInSeconds, duration));
-    
-    // Seek decoders
-    if (audioDecoder)
-        audioDecoder->seek(timeInSeconds);
-    
-    if (videoDecoder)
-        videoDecoder->seek(timeInSeconds);
-    
-    // Update current time
-    currentTime = timeInSeconds;
-    hasReachedEnd = false;
-    
-    if (config.enableLogging)
-        std::cout << "MediaReader: Seeked to " << timeInSeconds << "s" << std::endl;
-}
-
-double MediaReader::getCurrentTime() const
-{
-    if (!isInitialized)
-        return 0.0;
-    
-    // Get time from most accurate source
-    if (audioDecoder)
-        return audioDecoder->getCurrentTime();
-    else if (videoDecoder)
-        return videoDecoder->getCurrentTime();
-    
-    return currentTime;
-}
-
-double MediaReader::getDuration() const
-{
-    return duration;
-}
-
-bool MediaReader::getIsInitialized() const
-{
-    return isInitialized;
-}
-
-bool MediaReader::getIsPlaying() const
-{
-    return isPlaying && !isPaused;
-}
-
-bool MediaReader::getIsPaused() const
-{
-    return isPaused;
-}
-
-bool MediaReader::getHasAudio() const
-{
-    return hasAudio;
-}
-
-bool MediaReader::getHasVideo() const
-{
-    return hasVideo;
-}
-
-bool MediaReader::hasReachedEndOfFile() const
-{
-    if (!isInitialized)
-        return false;
-    
-    // Check if all active decoders have finished
-    bool audioFinished = !hasAudio || (audioDecoder && audioDecoder->isFinished());
-    bool videoFinished = !hasVideo || (videoDecoder && videoDecoder->isFinished());
-    
-    return audioFinished && videoFinished;
-}
-
-MediaAudioSource* MediaReader::getAudioSource() const
-{
-    return audioSource.get();
-}
-
-MediaVideoComponent* MediaReader::getVideoComponent() const
-{
-    return videoComponent.get();
-}
-
-MediaReaderStats MediaReader::getStats() const
-{
-    MediaReaderStats stats;
-    
-    if (!isInitialized)
-        return stats;
-    
-    stats.filename = currentFilename;
-    stats.hasAudio = hasAudio;
-    stats.hasVideo = hasVideo;
-    stats.duration = duration;
-    stats.currentTime = getCurrentTime();
-    stats.isPlaying = getIsPlaying();
-    stats.isPaused = getIsPaused();
-    
-    // Audio stats
-    if (audioBuffer)
-    {
-        auto audioStats = audioBuffer->getStats();
-        stats.audioStats.bufferSize = audioStats.bufferSize;
-        stats.audioStats.currentSize = audioStats.currentSize;
-        stats.audioStats.totalPushed = audioStats.totalFramesPushed;
-        stats.audioStats.totalPopped = audioStats.totalFramesPopped;
-        stats.audioStats.underruns = audioStats.underruns;
-        stats.audioStats.overruns = audioStats.overruns;
-    }
-    
-    // Video stats
-    if (videoBuffer)
-    {
-        stats.videoStats.queueSize = videoBuffer->getQueueSize();
-        stats.videoStats.maxQueueSize = config.videoConfig.maxQueueSize;
-        stats.videoStats.droppedFrames = videoBuffer->getDroppedFrameCount();
-    }
-    
-    return stats;
-}
-
-std::vector<MediaStreamInfo> MediaReader::getStreamInfo() const
-{
-    std::vector<MediaStreamInfo> streams;
-    
-    if (!formatCtx)
-        return streams;
-    
-    for (unsigned int i = 0; i < formatCtx->nb_streams; ++i)
-    {
-        AVStream* stream = formatCtx->streams[i];
-        MediaStreamInfo info;
-        
-        info.index = i;
-        info.type = static_cast<MediaType>(stream->codecpar->codec_type);
-        info.codecName = avcodec_get_name(stream->codecpar->codec_id);
-        
-        if (stream->duration != AV_NOPTS_VALUE)
-            info.duration = stream->duration * av_q2d(stream->time_base);
-        else
-            info.duration = duration;
-        
-        if (info.type == MediaType::Audio)
-        {
-            info.audioInfo.sampleRate = stream->codecpar->sample_rate;
-            info.audioInfo.channels = stream->codecpar->ch_layout.nb_channels;
-            info.audioInfo.bitrate = stream->codecpar->bit_rate;
-        }
-        else if (info.type == MediaType::Video)
-        {
-            info.videoInfo.width = stream->codecpar->width;
-            info.videoInfo.height = stream->codecpar->height;
-            info.videoInfo.bitrate = stream->codecpar->bit_rate;
-            
-            if (stream->avg_frame_rate.num > 0 && stream->avg_frame_rate.den > 0)
-                info.videoInfo.frameRate = av_q2d(stream->avg_frame_rate);
-            else
-                info.videoInfo.frameRate = 0.0;
-        }
-        
-        streams.push_back(info);
-    }
-    
-    return streams;
 }
 
 void MediaReader::setLooping(bool shouldLoop)
 {
-    config.enableLooping = shouldLoop;
 }
 
-bool MediaReader::getLooping() const
+double MediaReader::getCurrentPosition() const
 {
-    return config.enableLooping;
+    if (audioDecoder_)
+    {
+        return audioDecoder_->getCurrentTimestamp();
+    }
+    return 0.0;
 }
 
-void MediaReader::setVolume(float volume)
+double MediaReader::getProgress() const
 {
-    if (audioSource)
-        audioSource->setVolume(volume);
+    return 0.0;
 }
 
-float MediaReader::getVolume() const
+void MediaReader::setPlaybackRate(double rate)
 {
-    if (audioSource)
-        return audioSource->getVolume();
+}
+
+double MediaReader::getPlaybackRate() const
+{
+    return 1.0;
+}
+
+juce::AudioSource* MediaReader::getAudioSource()
+{
+    // Return the real audio source if we have one
+    if (audioSource_)
+    {
+        return audioSource_;
+    }
     
-    return 1.0f;
+    // Return nullptr if no audio or audio pipeline not set up
+    return nullptr;
 }
 
-std::string MediaReader::getCurrentFilename() const
+juce::Component* MediaReader::getVideoComponent()
 {
-    return currentFilename;
+    // Create a basic video component if we have video and one doesn't exist yet
+    if (mediaInfo_.hasVideo() && !videoComponent_)
+    {
+        // For now, create a simple placeholder component
+        // This prevents null pointer errors in the UI
+        class PlaceholderVideoComponent : public juce::Component
+        {
+        public:
+            PlaceholderVideoComponent()
+            {
+                setSize(640, 480);
+            }
+            
+            void paint(juce::Graphics& g) override
+            {
+                g.fillAll(juce::Colours::black);
+                g.setColour(juce::Colours::white);
+                g.setFont(juce::FontOptions(20.0f));
+                g.drawText("Video Placeholder", getLocalBounds(), juce::Justification::centred);
+            }
+        };
+        
+        static PlaceholderVideoComponent placeholderComponent;
+        videoComponent_ = &placeholderComponent;
+    }
+    
+    return videoComponent_;
 }
 
-// Factory functions
-std::unique_ptr<MediaReader> createMediaReader(const MediaReaderConfig& config)
+juce::Image MediaReader::getCurrentImage()
 {
-    return std::make_unique<MediaReader>(config);
+    return juce::Image();
 }
 
-std::unique_ptr<MediaReader> createAudioOnlyReader()
+void MediaReader::setConfig(const MediaReaderConfig& config)
 {
-    auto config = MediaReaderConfig::createAudioOnlyConfig();
-    return createMediaReader(config);
 }
 
-std::unique_ptr<MediaReader> createVideoOnlyReader()
+void MediaReader::setCallback(MediaReaderCallback* callback)
 {
-    auto config = MediaReaderConfig::createVideoOnlyConfig();
-    return createMediaReader(config);
+    callback_ = callback;
 }
 
-std::unique_ptr<MediaReader> createHighPerformanceReader()
+void MediaReader::setError(const juce::String& error)
 {
-    auto config = MediaReaderConfig::createHighPerformanceConfig();
-    return createMediaReader(config);
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    lastError_ = error;
 }
 
-std::unique_ptr<MediaReader> createLowLatencyReader()
+void MediaReader::setPlaybackState(PlaybackState newState)
 {
-    auto config = MediaReaderConfig::createLowLatencyConfig();
-    return createMediaReader(config);
+    playbackState_.store(newState);
 }
 
-} // namespace cb 
+} 
